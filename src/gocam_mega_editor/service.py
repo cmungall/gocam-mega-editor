@@ -30,8 +30,11 @@ from gocam_mega_editor.models import (
     GraphEdge,
     GraphNode,
     MegaGraph,
+    ModelEdge,
+    ModelNode,
     ModelSummary,
     SharedGene,
+    SpeciesCluster,
 )
 
 logger = logging.getLogger(__name__)
@@ -158,14 +161,15 @@ class GoCamService:
         self.adapter.save(model)
 
     def find_connected_models(self, model_ids: list[str] | None = None) -> ConnectedModels:
-        """Find models that share gene products.
+        """Find models that share gene products, grouped by species.
 
-        If model_ids is provided, only look at those models.
-        Otherwise, scan all models in the adapter.
+        Only same-species gene sharing counts as a real connection.
         """
         if model_ids is None:
             model_ids = self.adapter.list_ids()
 
+        # Collect model metadata + gene->model mapping
+        model_info: dict[str, dict] = {}
         gene_to_models: dict[str, list[str]] = defaultdict(list)
         gene_labels: dict[str, str] = {}
 
@@ -173,34 +177,95 @@ class GoCamService:
             model = self.adapter.get(mid)
             if not model:
                 continue
+            taxon = model.taxon
+            # Resolve taxon label
+            taxon_label = None
+            if taxon and model.objects:
+                for obj in model.objects:
+                    if obj.id == taxon and obj.label:
+                        taxon_label = obj.label
+                        break
+            model_info[mid] = {
+                "title": model.title or mid,
+                "taxon": taxon,
+                "taxon_label": taxon_label,
+                "activity_count": len(model.activities or []),
+            }
             for act in model.activities or []:
                 if act.enabled_by and act.enabled_by.term:
                     gene = act.enabled_by.term
                     gene_to_models[gene].append(mid)
-                    # Try to resolve label
                     if gene not in gene_labels and model.objects:
                         for obj in model.objects:
                             if obj.id == gene and obj.label:
                                 gene_labels[gene] = obj.label
                                 break
 
-        shared = [
-            SharedGene(
-                gene_id=gene,
-                label=gene_labels.get(gene),
-                model_ids=sorted(set(mids)),
-            )
-            for gene, mids in gene_to_models.items()
-            if len(set(mids)) > 1
-        ]
-        shared.sort(key=lambda g: len(g.model_ids), reverse=True)
+        # Group models by species
+        species_models: dict[str | None, list[str]] = defaultdict(list)
+        for mid, info in model_info.items():
+            species_models[info["taxon"]].append(mid)
 
-        connected_model_ids = sorted({mid for g in shared for mid in g.model_ids})
+        # Build per-species clusters
+        clusters: list[SpeciesCluster] = []
+        total_connections = 0
+
+        for taxon, mids in sorted(species_models.items(), key=lambda x: len(x[1]), reverse=True):
+            mid_set = set(mids)
+            # Find model-to-model edges via shared genes (same species only)
+            pair_genes: dict[tuple[str, str], list[SharedGene]] = defaultdict(list)
+            for gene, gene_mids in gene_to_models.items():
+                same_species = [m for m in gene_mids if m in mid_set]
+                unique = sorted(set(same_species))
+                if len(unique) < 2:
+                    continue
+                sg = SharedGene(gene_id=gene, label=gene_labels.get(gene), model_ids=unique)
+                from itertools import combinations
+                for a, b in combinations(unique, 2):
+                    pair_genes[(a, b)].append(sg)
+
+            edges = [
+                ModelEdge(
+                    source=a,
+                    target=b,
+                    shared_genes=genes,
+                    weight=len(genes),
+                )
+                for (a, b), genes in sorted(pair_genes.items(), key=lambda x: len(x[1]), reverse=True)
+            ]
+
+            # Only include models that have connections (or all if no connections)
+            connected_mids = {m for e in edges for m in (e.source, e.target)}
+            include_mids = connected_mids if connected_mids else set(mids)
+
+            nodes = [
+                ModelNode(
+                    id=mid,
+                    title=model_info[mid]["title"],
+                    taxon=model_info[mid]["taxon"],
+                    activity_count=model_info[mid]["activity_count"],
+                )
+                for mid in sorted(include_mids)
+            ]
+
+            taxon_label = None
+            if mids and model_info[mids[0]].get("taxon_label"):
+                taxon_label = model_info[mids[0]]["taxon_label"]
+
+            total_connections += len(edges)
+            clusters.append(
+                SpeciesCluster(
+                    taxon=taxon,
+                    taxon_label=taxon_label,
+                    models=nodes,
+                    edges=edges,
+                )
+            )
 
         return ConnectedModels(
-            shared_genes=shared,
-            model_ids=connected_model_ids,
-            connection_count=len(shared),
+            species_clusters=clusters,
+            total_models=len(model_info),
+            total_connections=total_connections,
         )
 
     def get_mega_graph(self, model_ids: list[str]) -> MegaGraph:

@@ -109,10 +109,31 @@ export interface SharedGene {
   model_ids: string[]
 }
 
-export interface ConnectedModelsResult {
+export interface ModelNode {
+  id: string
+  title: string
+  taxon: string | null
+  activity_count: number
+}
+
+export interface ModelEdge {
+  source: string
+  target: string
   shared_genes: SharedGene[]
-  model_ids: string[]
-  connection_count: number
+  weight: number
+}
+
+export interface SpeciesCluster {
+  taxon: string | null
+  taxon_label: string | null
+  models: ModelNode[]
+  edges: ModelEdge[]
+}
+
+export interface ConnectedModelsResult {
+  species_clusters: SpeciesCluster[]
+  total_models: number
+  total_connections: number
 }
 
 export function fetchConnectedModels(modelIds?: string[]): Promise<ConnectedModelsResult> {

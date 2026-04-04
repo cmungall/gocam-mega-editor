@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -205,10 +205,10 @@ export function GraphView() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
 
   // Sync when model loads or changes (after save)
-  useMemo(() => {
+  useEffect(() => {
     if (initialNodes.length > 0) setNodes(initialNodes)
   }, [initialNodes, setNodes])
-  useMemo(() => {
+  useEffect(() => {
     if (initialEdges.length > 0) setEdges(initialEdges)
   }, [initialEdges, setEdges])
 

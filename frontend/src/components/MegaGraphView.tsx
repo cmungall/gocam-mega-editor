@@ -1,5 +1,5 @@
-import { useMemo, useState, useCallback } from "react"
-import { Link } from "react-router-dom"
+import { useMemo, useState, useCallback, useEffect } from "react"
+import { Link, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import {
   ReactFlow,
@@ -13,160 +13,167 @@ import {
   type OnNodesChange,
   type OnEdgesChange,
   type NodeMouseHandler,
-  MarkerType,
+  type EdgeMouseHandler,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import { ArrowLeft, Loader2, Network } from "lucide-react"
 
-import { fetchConnectedModels, fetchGraph, type MegaGraph } from "@/lib/api"
-import { classifyPredicate, EDGE_COLORS } from "@/lib/colors"
+import {
+  fetchConnectedModels,
+  type SpeciesCluster,
+  type ModelEdge as ApiModelEdge,
+} from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-// Color palette for different source models
-const MODEL_COLORS = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ec4899", "#6366f1",
-  "#f97316", "#14b8a6", "#8b5cf6", "#eab308", "#0ea5e9",
-  "#d946ef", "#ef4444",
-]
+const SPECIES_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  "NCBITaxon:10090": { bg: "#dbeafe", border: "#3b82f6", text: "#1e40af" },   // mouse - blue
+  "NCBITaxon:9606":  { bg: "#dcfce7", border: "#22c55e", text: "#166534" },   // human - green
+  "NCBITaxon:6239":  { bg: "#fef3c7", border: "#f59e0b", text: "#92400e" },   // C. elegans - amber
+  "NCBITaxon:7955":  { bg: "#fce7f3", border: "#ec4899", text: "#9d174d" },   // zebrafish - pink
+  "NCBITaxon:7227":  { bg: "#e0e7ff", border: "#6366f1", text: "#3730a3" },   // drosophila - indigo
+  "NCBITaxon:559292": { bg: "#ffedd5", border: "#f97316", text: "#9a3412" },  // yeast - orange
+}
+const DEFAULT_COLOR = { bg: "#f5f5f5", border: "#a3a3a3", text: "#525252" }
 
-function buildMegaNodes(graph: MegaGraph, modelColorMap: Map<string, string>): Node[] {
-  // Simple force-directed-ish layout: hash position from node ID
-  const nodes: Node[] = graph.nodes.map((n, i) => {
-    const angle = (i / graph.nodes.length) * 2 * Math.PI
-    const radius = 200 + Math.random() * 300
-    const modelId = Array.isArray(n.model_id) ? n.model_id[0] : n.model_id
-    const color = modelColorMap.get(modelId ?? "") ?? "#94a3b8"
+function getSpeciesColor(taxon: string | null) {
+  if (!taxon) return DEFAULT_COLOR
+  return SPECIES_COLORS[taxon] ?? DEFAULT_COLOR
+}
+
+function buildModelNodes(cluster: SpeciesCluster, xOffset: number): Node[] {
+  const color = getSpeciesColor(cluster.taxon)
+  const models = cluster.models
+  // Circle layout within the cluster
+  const radius = Math.max(150, models.length * 40)
+
+  return models.map((m, i) => {
+    const angle = (i / models.length) * 2 * Math.PI - Math.PI / 2
+    const x = xOffset + Math.cos(angle) * radius
+    const y = Math.sin(angle) * radius
+    // Node size scales with activity count
+    const size = Math.max(80, Math.min(200, 60 + m.activity_count * 12))
+
     return {
-      id: n.id,
-      position: {
-        x: Math.cos(angle) * radius + (Math.random() - 0.5) * 100,
-        y: Math.sin(angle) * radius + (Math.random() - 0.5) * 100,
-      },
+      id: m.id,
+      position: { x, y },
       data: {
-        label: n.label || n.id,
-        modelId: modelId,
-        geneProduct: n.gene_product,
-        isShared: false, // will be set below
+        label: m.title,
+        activityCount: m.activity_count,
+        taxon: cluster.taxon_label ?? cluster.taxon,
       },
       style: {
-        background: `${color}20`,
-        border: `2px solid ${color}`,
-        borderRadius: "8px",
-        padding: "8px 12px",
+        background: color.bg,
+        border: `2px solid ${color.border}`,
+        borderRadius: "10px",
+        padding: "10px 14px",
+        width: `${size}px`,
         fontSize: "11px",
         fontWeight: 600,
-        color: color,
+        color: color.text,
+        cursor: "pointer",
       },
     }
   })
-
-  // Mark shared nodes (appear in edges from multiple models)
-  const nodeModels = new Map<string, Set<string>>()
-  for (const edge of graph.edges) {
-    const mid = Array.isArray(edge.model_id) ? edge.model_id : [edge.model_id]
-    for (const m of mid) {
-      if (!m) continue
-      for (const nid of [edge.source, edge.target]) {
-        if (!nodeModels.has(nid)) nodeModels.set(nid, new Set())
-        nodeModels.get(nid)!.add(m)
-      }
-    }
-  }
-  for (const node of nodes) {
-    const models = nodeModels.get(node.id)
-    if (models && models.size > 1) {
-      node.data.isShared = true
-      node.style = {
-        ...node.style,
-        background: "#fef3c7",
-        border: "3px solid #f59e0b",
-        color: "#92400e",
-        boxShadow: "0 0 12px rgba(245, 158, 11, 0.4)",
-      }
-    }
-  }
-
-  return nodes
 }
 
-function buildMegaEdges(graph: MegaGraph, modelColorMap: Map<string, string>): Edge[] {
-  return graph.edges.map((e, i) => {
-    const predicate = Array.isArray(e.causal_predicate) ? e.causal_predicate[0] : e.causal_predicate
-    const modelId = Array.isArray(e.model_id) ? e.model_id[0] : e.model_id
-    const edgeType = classifyPredicate(predicate)
-    const edgeColor = EDGE_COLORS[edgeType]
-    const modelColor = modelColorMap.get(modelId ?? "") ?? edgeColor.stroke
+function buildModelEdges(cluster: SpeciesCluster): Edge[] {
+  const color = getSpeciesColor(cluster.taxon)
+  return cluster.edges.map((e, i) => {
+    const maxWeight = Math.max(...cluster.edges.map((x) => x.weight), 1)
+    const thickness = 1.5 + (e.weight / maxWeight) * 4
 
     return {
-      id: `mega-${i}`,
+      id: `${cluster.taxon}-${i}`,
       source: e.source,
       target: e.target,
-      label: predicate ?? "",
-      markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: modelColor },
-      style: { strokeWidth: 1.5, stroke: modelColor, opacity: 0.7 },
-      labelStyle: { fontSize: 8, fill: edgeColor.label },
-      labelBgStyle: { fill: "#ffffff", fillOpacity: 0.8 },
-      labelBgPadding: [3, 1] as [number, number],
-      labelBgBorderRadius: 2,
+      label: `${e.weight}`,
+      style: {
+        strokeWidth: thickness,
+        stroke: color.border,
+        opacity: 0.5 + (e.weight / maxWeight) * 0.5,
+      },
+      labelStyle: {
+        fontSize: 10,
+        fontWeight: 700,
+        fill: color.text,
+      },
+      labelBgStyle: {
+        fill: "#ffffff",
+        fillOpacity: 0.9,
+      },
+      labelBgPadding: [4, 2] as [number, number],
+      labelBgBorderRadius: 4,
+      data: { sharedGenes: e.shared_genes },
     }
   })
 }
 
 export function MegaGraphView() {
-  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const [hoveredEdge, setHoveredEdge] = useState<ApiModelEdge | null>(null)
+  const [selectedCluster, setSelectedCluster] = useState<string | null>(null)
 
-  const { data: connected, isLoading: connLoading } = useQuery({
+  const { data: connected, isLoading } = useQuery({
     queryKey: ["connected-models"],
     queryFn: () => fetchConnectedModels(),
   })
 
-  const connectedIds = connected?.model_ids ?? []
+  const clusters = connected?.species_clusters ?? []
+  const visibleClusters = selectedCluster
+    ? clusters.filter((c) => (c.taxon ?? "unknown") === selectedCluster)
+    : clusters
 
-  const { data: graph, isLoading: graphLoading } = useQuery({
-    queryKey: ["mega-graph", connectedIds],
-    queryFn: () => fetchGraph(connectedIds),
-    enabled: connectedIds.length > 0,
-  })
+  // Stable key for when data actually changes
+  const dataKey = connected ? `${connected.total_models}-${connected.total_connections}-${selectedCluster ?? "all"}` : ""
 
-  const modelColorMap = useMemo(() => {
-    const map = new Map<string, string>()
-    connectedIds.forEach((id, i) => {
-      map.set(`gomodel:${id}`, MODEL_COLORS[i % MODEL_COLORS.length])
-    })
-    return map
-  }, [connectedIds])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
-  const initialNodes = useMemo(() => {
-    if (!graph) return []
-    return buildMegaNodes(graph, modelColorMap)
-  }, [graph, modelColorMap])
+  useEffect(() => {
+    if (!connected) return
+    const allNodes: Node[] = []
+    let xOffset = 0
+    for (const cluster of visibleClusters) {
+      allNodes.push(...buildModelNodes(cluster, xOffset))
+      xOffset += Math.max(500, cluster.models.length * 120)
+    }
+    setNodes(allNodes)
+    setEdges(visibleClusters.flatMap(buildModelEdges))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataKey])
 
-  const initialEdges = useMemo(() => {
-    if (!graph) return []
-    return buildMegaEdges(graph, modelColorMap)
-  }, [graph, modelColorMap])
+  const onNodeClick: NodeMouseHandler = useCallback(
+    (_event, node) => { navigate(`/model/${node.id}`) },
+    [navigate]
+  )
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const onEdgeMouseEnter: EdgeMouseHandler = useCallback(
+    (_event, edge) => {
+      // Find the matching API edge to get shared genes
+      for (const cluster of clusters) {
+        const apiEdge = cluster.edges.find(
+          (e) => (e.source === edge.source && e.target === edge.target) ||
+                 (e.source === edge.target && e.target === edge.source)
+        )
+        if (apiEdge) {
+          setHoveredEdge(apiEdge)
+          return
+        }
+      }
+    },
+    [clusters]
+  )
 
-  useMemo(() => {
-    if (initialNodes.length > 0) setNodes(initialNodes)
-  }, [initialNodes, setNodes])
-  useMemo(() => {
-    if (initialEdges.length > 0) setEdges(initialEdges)
-  }, [initialEdges, setEdges])
-
-  const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
-    setSelectedNode((prev) => (prev === node.id ? null : node.id))
+  const onEdgeMouseLeave: EdgeMouseHandler = useCallback(() => {
+    setHoveredEdge(null)
   }, [])
-
-  const isLoading = connLoading || graphLoading
 
   return (
     <div className="flex h-full">
       <div className="flex-1 flex flex-col">
+        {/* Header */}
         <div className="h-12 border-b flex items-center gap-3 px-3 shrink-0 bg-card">
           <Link to="/">
             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -175,21 +182,48 @@ export function MegaGraphView() {
           </Link>
           <Network className="h-4 w-4 text-muted-foreground" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold">Mega-Graph</p>
+            <p className="text-sm font-semibold">Model Network</p>
             <p className="text-[10px] text-muted-foreground">
-              {connectedIds.length} connected models
-              {graph && ` · ${graph.node_count} genes · ${graph.edge_count} edges`}
+              {connected
+                ? `${connected.total_models} models · ${connected.total_connections} connections`
+                : "Loading..."}
             </p>
+          </div>
+          {/* Species filter buttons */}
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button
+              variant={selectedCluster === null ? "default" : "outline"}
+              size="sm"
+              className="h-6 text-[10px] px-2"
+              onClick={() => setSelectedCluster(null)}
+            >
+              All
+            </Button>
+            {clusters.map((c) => {
+              const color = getSpeciesColor(c.taxon)
+              const key = c.taxon ?? "unknown"
+              return (
+                <Button
+                  key={key}
+                  variant={selectedCluster === key ? "default" : "outline"}
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  style={selectedCluster !== key ? { borderColor: color.border, color: color.text } : {}}
+                  onClick={() => setSelectedCluster(selectedCluster === key ? null : key)}
+                >
+                  {c.taxon_label ?? c.taxon ?? "Unknown"} ({c.models.length})
+                </Button>
+              )
+            })}
           </div>
         </div>
 
+        {/* Graph */}
         <div className="flex-1 relative">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground text-sm">
-                {connLoading ? "Discovering connections..." : "Building mega-graph..."}
-              </span>
+              <span className="ml-2 text-muted-foreground text-sm">Discovering model connections...</span>
             </div>
           ) : (
             <ReactFlow
@@ -198,10 +232,12 @@ export function MegaGraphView() {
               onNodesChange={onNodesChange as OnNodesChange<Node>}
               onEdgesChange={onEdgesChange as OnEdgesChange<Edge>}
               onNodeClick={onNodeClick}
+              onEdgeMouseEnter={onEdgeMouseEnter}
+              onEdgeMouseLeave={onEdgeMouseLeave}
               fitView
               fitViewOptions={{ padding: 0.3 }}
-              minZoom={0.05}
-              maxZoom={4}
+              minZoom={0.1}
+              maxZoom={2}
             >
               <Background gap={30} size={1} />
               <Controls />
@@ -209,72 +245,67 @@ export function MegaGraphView() {
             </ReactFlow>
           )}
 
-          {/* Model color legend */}
-          {!isLoading && connectedIds.length > 0 && (
-            <div className="absolute top-2 right-2 z-10 bg-card/95 backdrop-blur border rounded-lg shadow-md p-2.5 max-w-52">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Models
+          {/* Edge hover tooltip */}
+          {hoveredEdge && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-card border rounded-lg shadow-lg p-3 max-w-sm">
+              <p className="text-xs font-semibold mb-1.5">
+                {hoveredEdge.weight} shared gene{hoveredEdge.weight !== 1 ? "s" : ""}
               </p>
-              <div className="space-y-1">
-                {connectedIds.map((id, i) => (
-                  <div key={id} className="flex items-center gap-1.5">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: MODEL_COLORS[i % MODEL_COLORS.length] }}
-                    />
-                    <Link to={`/model/${id}`} className="text-[10px] truncate hover:underline">
-                      {id}
-                    </Link>
-                  </div>
+              <div className="flex flex-wrap gap-1">
+                {hoveredEdge.shared_genes.map((g) => (
+                  <Badge key={g.gene_id} variant="secondary" className="text-[10px]">
+                    {g.label || g.gene_id}
+                  </Badge>
                 ))}
-              </div>
-              <div className="border-t mt-2 pt-1.5">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-sm shrink-0"
-                    style={{ backgroundColor: "#fef3c7", border: "1.5px solid #f59e0b" }}
-                  />
-                  <span className="text-[10px]">Shared gene (multi-model)</span>
-                </div>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Shared genes panel */}
-      {connected && connected.shared_genes.length > 0 && (
-        <div className="w-72 border-l bg-card flex flex-col h-full">
-          <div className="p-3 border-b">
-            <h3 className="font-semibold text-sm">Shared Gene Products</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {connected.connection_count} genes shared across models
-            </p>
-          </div>
-          <ScrollArea className="flex-1">
-            <div className="p-2 space-y-1">
-              {connected.shared_genes.map((g) => (
-                <div
-                  key={g.gene_id}
-                  className={`rounded border p-2 text-xs cursor-pointer transition-colors ${
-                    selectedNode === g.gene_id ? "bg-amber-50 border-amber-300" : "hover:bg-muted/50"
-                  }`}
-                  onClick={() => setSelectedNode(g.gene_id)}
-                >
-                  <p className="font-medium">{g.label || g.gene_id}</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">{g.gene_id}</p>
-                  <div className="flex gap-1 mt-1 flex-wrap">
-                    {g.model_ids.map((mid) => (
-                      <Badge key={mid} variant="outline" className="text-[9px] h-4 px-1">
-                        {mid.slice(-8)}
-                      </Badge>
+      {/* Species summary panel */}
+      <div className="w-64 border-l bg-card flex flex-col h-full">
+        <div className="p-3 border-b">
+          <h3 className="font-semibold text-sm">Species</h3>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-2">
+            {clusters.map((cluster) => {
+              const color = getSpeciesColor(cluster.taxon)
+              return (
+                <div key={cluster.taxon ?? "unknown"} className="rounded border p-2.5">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div
+                      className="w-3 h-3 rounded-sm"
+                      style={{ backgroundColor: color.bg, border: `1.5px solid ${color.border}` }}
+                    />
+                    <p className="text-xs font-semibold" style={{ color: color.text }}>
+                      {cluster.taxon_label ?? cluster.taxon ?? "Unknown"}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {cluster.models.length} models · {cluster.edges.length} connections
+                  </p>
+                  <div className="mt-1.5 space-y-0.5">
+                    {cluster.models.slice(0, 5).map((m) => (
+                      <Link key={m.id} to={`/model/${m.id}`}>
+                        <p className="text-[10px] truncate hover:underline hover:text-primary">
+                          {m.title}
+                        </p>
+                      </Link>
                     ))}
+                    {cluster.models.length > 5 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        +{cluster.models.length - 5} more
+                      </p>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      )}
+              )
+            })}
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   )
 }

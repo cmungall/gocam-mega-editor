@@ -82,9 +82,36 @@ class SharedGene(BaseModel):
     model_ids: list[str]
 
 
-class ConnectedModels(BaseModel):
-    """Discovery result: models that share gene products."""
+class ModelNode(BaseModel):
+    """A model as a node in the mega-graph."""
 
+    id: str
+    title: str
+    taxon: str | None = None
+    activity_count: int = 0
+
+
+class ModelEdge(BaseModel):
+    """An edge between two models (shared gene products)."""
+
+    source: str
+    target: str
     shared_genes: list[SharedGene]
-    model_ids: list[str]
-    connection_count: int
+    weight: int  # number of shared genes
+
+
+class SpeciesCluster(BaseModel):
+    """A cluster of connected models within a single species."""
+
+    taxon: str | None = None
+    taxon_label: str | None = None
+    models: list[ModelNode]
+    edges: list[ModelEdge]
+
+
+class ConnectedModels(BaseModel):
+    """Discovery result: models grouped by species with inter-model edges."""
+
+    species_clusters: list[SpeciesCluster]
+    total_models: int
+    total_connections: int
