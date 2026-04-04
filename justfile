@@ -18,6 +18,10 @@ dev:
     trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT
     wait
 
+# Serve documentation site
+docs:
+    uv run mkdocs serve -a 127.0.0.1:8485
+
 # Run backend tests
 test:
     uv run pytest tests/ -v

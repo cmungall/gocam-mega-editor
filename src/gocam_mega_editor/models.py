@@ -66,6 +66,21 @@ class ActivityUpdate(BaseModel):
     evidence: list[EvidenceInput] | None = None
 
 
+class GeneConnection(BaseModel):
+    """A gene product in this model that also appears in other models."""
+
+    gene_id: str
+    label: str | None = None
+    other_models: list[ModelSummary]
+
+
+class ModelConnections(BaseModel):
+    """Cross-model connections for a single model."""
+
+    model_id: str
+    connections: list[GeneConnection]
+
+
 class CausalEdgeCreate(BaseModel):
     """Create a new causal association between two activities."""
 

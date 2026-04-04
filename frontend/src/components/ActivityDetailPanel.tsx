@@ -1,5 +1,6 @@
-import { X } from "lucide-react"
-import type { Activity, Association, EvidenceItem, GoCamModel } from "@/lib/api"
+import { Link } from "react-router-dom"
+import { X, ExternalLink } from "lucide-react"
+import type { Activity, Association, EvidenceItem, GoCamModel, GeneConnection } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -8,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 interface Props {
   activity: Activity
   model: GoCamModel
+  geneConnection?: GeneConnection
   onClose: () => void
 }
 
@@ -67,7 +69,7 @@ function AssociationSection({
   )
 }
 
-export function ActivityDetailPanel({ activity, model, onClose }: Props) {
+export function ActivityDetailPanel({ activity, model, onClose, geneConnection }: Props) {
   const causal = activity.causal_associations ?? []
   const inputs = [...(activity.has_input ?? []), ...(activity.has_primary_input ?? [])]
   const outputs = [...(activity.has_output ?? []), ...(activity.has_primary_output ?? [])]
@@ -121,7 +123,6 @@ export function ActivityDetailPanel({ activity, model, onClose }: Props) {
                 <ul className="space-y-2">
                   {causal.map((c, i) => {
                     const predLabel = resolveLabel(c.predicate, model) || c.predicate || "?"
-                    // Find the downstream activity's gene product for a useful label
                     const downAct = model.activities?.find(
                       (a) => a.id === c.downstream_activity
                     )
@@ -139,6 +140,30 @@ export function ActivityDetailPanel({ activity, model, onClose }: Props) {
                       </li>
                     )
                   })}
+                </ul>
+              </div>
+            </>
+          )}
+
+          {geneConnection && geneConnection.other_models.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Also in {geneConnection.other_models.length} other model{geneConnection.other_models.length > 1 ? "s" : ""}
+                </p>
+                <ul className="space-y-1.5">
+                  {geneConnection.other_models.map((m) => (
+                    <li key={m.id}>
+                      <Link
+                        to={`/model/${m.id}`}
+                        className="flex items-center gap-1.5 text-xs hover:underline text-primary"
+                      >
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{m.title}</span>
+                      </Link>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </>

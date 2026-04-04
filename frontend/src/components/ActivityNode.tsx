@@ -12,6 +12,8 @@ export interface ActivityNodeData {
   bgColor: string
   borderColor: string
   textColor: string
+  // Cross-model connections
+  connectedModelCount?: number
   [key: string]: unknown
 }
 
@@ -21,11 +23,12 @@ export const ActivityNode = memo(function ActivityNode({
 }: NodeProps) {
   const d = data as unknown as ActivityNodeData
   const expanded = d.isExpanded
+  const connCount = d.connectedModelCount ?? 0
 
   return (
     <div
       className={`
-        rounded-lg border-2 shadow-sm
+        rounded-lg border-2 shadow-sm relative
         transition-all duration-200
         ${selected ? "ring-2 ring-ring ring-offset-1" : ""}
         ${expanded ? "min-w-60" : "min-w-40"}
@@ -41,6 +44,17 @@ export const ActivityNode = memo(function ActivityNode({
         className="!w-2.5 !h-2.5 !-left-[6px]"
         style={{ backgroundColor: d.borderColor }}
       />
+
+      {/* Connection badge */}
+      {connCount > 0 && (
+        <div
+          className="absolute -top-2.5 -right-2.5 min-w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm px-1"
+          style={{ backgroundColor: "#f59e0b" }}
+          title={`Shared with ${connCount} other model${connCount > 1 ? "s" : ""}`}
+        >
+          {connCount}
+        </div>
+      )}
 
       <div className="px-3 py-2">
         <p

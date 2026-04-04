@@ -13,7 +13,7 @@ app = typer.Typer(help="GO-CAM Mega Editor")
 @app.command()
 def serve(
     host: str = "127.0.0.1",
-    port: int = 8000,
+    port: int = 8484,
     reload: bool = True,
     adapter: Annotated[
         str,

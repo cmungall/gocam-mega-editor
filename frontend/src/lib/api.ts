@@ -141,6 +141,21 @@ export function fetchConnectedModels(modelIds?: string[]): Promise<ConnectedMode
   return fetchJson(`${BASE}/connected-models${params ? `?${params}` : ""}`)
 }
 
+export interface GeneConnection {
+  gene_id: string
+  label: string | null
+  other_models: ModelSummary[]
+}
+
+export interface ModelConnectionsResult {
+  model_id: string
+  connections: GeneConnection[]
+}
+
+export function fetchModelConnections(modelId: string): Promise<ModelConnectionsResult> {
+  return fetchJson(`${BASE}/model/${modelId}/connections`)
+}
+
 export function fetchPredicates(): Promise<Record<string, string>> {
   return fetchJson(`${BASE}/predicates`)
 }

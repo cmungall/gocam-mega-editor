@@ -27,9 +27,11 @@ from gocam_mega_editor.models import (
     CausalEdgeCreate,
     ConnectedModels,
     EvidenceInput,
+    GeneConnection,
     GraphEdge,
     GraphNode,
     MegaGraph,
+    ModelConnections,
     ModelEdge,
     ModelNode,
     ModelSummary,
@@ -159,6 +161,62 @@ class GoCamService:
                 if ca.downstream_activity != target_activity_id
             ]
         self.adapter.save(model)
+
+    def get_model_connections(self, model_id: str) -> ModelConnections:
+        """Find which gene products in this model also appear in other models.
+
+        Only considers same-species models.
+        """
+        model = self.get_model(model_id)
+        taxon = model.taxon
+
+        # Collect this model's gene products
+        my_genes: dict[str, str | None] = {}
+        for act in model.activities or []:
+            if act.enabled_by and act.enabled_by.term:
+                gene = act.enabled_by.term
+                label = None
+                if model.objects:
+                    for obj in model.objects:
+                        if obj.id == gene and obj.label:
+                            label = obj.label
+                            break
+                my_genes[gene] = label
+
+        # Scan other models for matches
+        gene_other_models: dict[str, list[ModelSummary]] = defaultdict(list)
+        for other_id in self.adapter.list_ids():
+            if other_id == model_id:
+                continue
+            other = self.adapter.get(other_id)
+            if not other or other.taxon != taxon:
+                continue
+            other_genes = {
+                act.enabled_by.term
+                for act in (other.activities or [])
+                if act.enabled_by and act.enabled_by.term
+            }
+            shared = other_genes & my_genes.keys()
+            if shared:
+                summary = ModelSummary(
+                    id=other_id,
+                    title=other.title or other_id,
+                    taxon=other.taxon,
+                    activity_count=len(other.activities or []),
+                )
+                for gene in shared:
+                    gene_other_models[gene].append(summary)
+
+        connections = [
+            GeneConnection(
+                gene_id=gene,
+                label=my_genes.get(gene),
+                other_models=models,
+            )
+            for gene, models in sorted(gene_other_models.items(), key=lambda x: len(x[1]), reverse=True)
+        ]
+
+        return ModelConnections(model_id=model_id, connections=connections)
 
     def find_connected_models(self, model_ids: list[str] | None = None) -> ConnectedModels:
         """Find models that share gene products, grouped by species.

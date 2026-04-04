@@ -20,7 +20,14 @@ import {
 import "@xyflow/react/dist/style.css"
 import { ArrowLeft, Loader2, Pencil } from "lucide-react"
 
-import { fetchModel, fetchGraph, type GoCamModel, type Activity } from "@/lib/api"
+import {
+  fetchModel,
+  fetchGraph,
+  fetchModelConnections,
+  type GoCamModel,
+  type Activity,
+  type ModelConnectionsResult,
+} from "@/lib/api"
 import {
   buildProcessColorMap,
   getProcessColor,
@@ -48,7 +55,15 @@ function layoutNodes(
   activities: Activity[],
   model: GoCamModel,
   colorMap: Map<string, ProcessColor>,
+  connections?: ModelConnectionsResult,
 ): Node[] {
+  // Build gene -> connected model count map
+  const geneConnCount = new Map<string, number>()
+  if (connections) {
+    for (const conn of connections.connections) {
+      geneConnCount.set(conn.gene_id, conn.other_models.length)
+    }
+  }
   const idToIdx = new Map<string, number>()
   activities.forEach((a, i) => idToIdx.set(a.id, i))
 
@@ -113,6 +128,7 @@ function layoutNodes(
         bgColor: color.bg,
         borderColor: color.border,
         textColor: color.text,
+        connectedModelCount: geneConnCount.get(geneProduct) ?? 0,
       } satisfies ActivityNodeData,
     }
   })
@@ -172,10 +188,10 @@ export function GraphView() {
     enabled: !!modelId,
   })
 
-  // Pre-fetch the gene-gene mega-graph for future multi-model use
-  useQuery({
-    queryKey: ["graph", modelId],
-    queryFn: () => fetchGraph([modelId!]),
+  // Fetch cross-model connections for this model's gene products
+  const { data: connections } = useQuery({
+    queryKey: ["connections", modelId],
+    queryFn: () => fetchModelConnections(modelId!),
     enabled: !!modelId,
   })
 
@@ -193,8 +209,8 @@ export function GraphView() {
 
   const initialNodes = useMemo(() => {
     if (!model?.activities) return []
-    return layoutNodes(model.activities, model, colorMap)
-  }, [model, colorMap])
+    return layoutNodes(model.activities, model, colorMap, connections ?? undefined)
+  }, [model, colorMap, connections])
 
   const initialEdges = useMemo(() => {
     if (!model?.activities) return []
@@ -352,6 +368,11 @@ export function GraphView() {
             activity={selectedActivity}
             model={model}
             onClose={() => setSelectedActivity(null)}
+            geneConnection={
+              connections?.connections.find(
+                (c) => c.gene_id === selectedActivity.enabled_by?.term
+              )
+            }
           />
         )
       )}
