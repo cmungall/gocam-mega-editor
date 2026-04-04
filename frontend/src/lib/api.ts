@@ -103,6 +103,23 @@ export function fetchGraph(modelIds: string[]): Promise<MegaGraph> {
   return fetchJson(`${BASE}/graph?${params}`)
 }
 
+export interface SharedGene {
+  gene_id: string
+  label: string | null
+  model_ids: string[]
+}
+
+export interface ConnectedModelsResult {
+  shared_genes: SharedGene[]
+  model_ids: string[]
+  connection_count: number
+}
+
+export function fetchConnectedModels(modelIds?: string[]): Promise<ConnectedModelsResult> {
+  const params = modelIds?.map((id) => `model_id=${encodeURIComponent(id)}`).join("&")
+  return fetchJson(`${BASE}/connected-models${params ? `?${params}` : ""}`)
+}
+
 export function fetchPredicates(): Promise<Record<string, string>> {
   return fetchJson(`${BASE}/predicates`)
 }

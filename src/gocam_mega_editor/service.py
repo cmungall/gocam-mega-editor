@@ -5,6 +5,7 @@ Storage is delegated to a ModelAdapter implementation.
 """
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 
 import networkx as nx
@@ -24,11 +25,13 @@ from gocam_mega_editor.adapters import MinervaAdapter, ModelAdapter
 from gocam_mega_editor.models import (
     ActivityUpdate,
     CausalEdgeCreate,
+    ConnectedModels,
     EvidenceInput,
     GraphEdge,
     GraphNode,
     MegaGraph,
     ModelSummary,
+    SharedGene,
 )
 
 logger = logging.getLogger(__name__)
@@ -153,6 +156,52 @@ class GoCamService:
                 if ca.downstream_activity != target_activity_id
             ]
         self.adapter.save(model)
+
+    def find_connected_models(self, model_ids: list[str] | None = None) -> ConnectedModels:
+        """Find models that share gene products.
+
+        If model_ids is provided, only look at those models.
+        Otherwise, scan all models in the adapter.
+        """
+        if model_ids is None:
+            model_ids = self.adapter.list_ids()
+
+        gene_to_models: dict[str, list[str]] = defaultdict(list)
+        gene_labels: dict[str, str] = {}
+
+        for mid in model_ids:
+            model = self.adapter.get(mid)
+            if not model:
+                continue
+            for act in model.activities or []:
+                if act.enabled_by and act.enabled_by.term:
+                    gene = act.enabled_by.term
+                    gene_to_models[gene].append(mid)
+                    # Try to resolve label
+                    if gene not in gene_labels and model.objects:
+                        for obj in model.objects:
+                            if obj.id == gene and obj.label:
+                                gene_labels[gene] = obj.label
+                                break
+
+        shared = [
+            SharedGene(
+                gene_id=gene,
+                label=gene_labels.get(gene),
+                model_ids=sorted(set(mids)),
+            )
+            for gene, mids in gene_to_models.items()
+            if len(set(mids)) > 1
+        ]
+        shared.sort(key=lambda g: len(g.model_ids), reverse=True)
+
+        connected_model_ids = sorted({mid for g in shared for mid in g.model_ids})
+
+        return ConnectedModels(
+            shared_genes=shared,
+            model_ids=connected_model_ids,
+            connection_count=len(shared),
+        )
 
     def get_mega_graph(self, model_ids: list[str]) -> MegaGraph:
         """Build an interconnected graph from multiple models."""

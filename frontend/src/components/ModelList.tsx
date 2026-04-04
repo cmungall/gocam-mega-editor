@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
-import { Search, ArrowRight, Loader2 } from "lucide-react"
+import { Search, ArrowRight, Loader2, Network } from "lucide-react"
 import { fetchModels, type ModelSummary } from "@/lib/api"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
@@ -30,7 +31,15 @@ export function ModelList() {
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b space-y-3">
-        <h2 className="text-lg font-semibold">GO-CAM Models</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">GO-CAM Models</h2>
+          <Link to="/mega">
+            <Button variant="outline" size="sm" className="text-xs">
+              <Network className="h-3.5 w-3.5 mr-1.5" />
+              Mega-Graph
+            </Button>
+          </Link>
+        </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input

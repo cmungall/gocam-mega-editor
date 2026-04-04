@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from gocam_mega_editor.adapters import InMemoryAdapter, MinervaAdapter
-from gocam_mega_editor.models import ActivityUpdate, CausalEdgeCreate, MegaGraph, ModelSummary
+from gocam_mega_editor.models import ActivityUpdate, CausalEdgeCreate, ConnectedModels, MegaGraph, ModelSummary
 from gocam_mega_editor.service import GoCamService
 
 # Common RO relation labels for causal predicates used in GO-CAM
@@ -89,6 +89,18 @@ def get_model(model_id: str) -> dict:
         if pred_id not in existing_ids:
             data["objects"].append({"id": pred_id, "label": pred_label})
     return data
+
+
+@app.get("/connected-models", response_model=ConnectedModels)
+def connected_models(
+    model_ids: list[str] | None = Query(default=None, alias="model_id"),
+) -> ConnectedModels:
+    """Discover models that share gene products.
+
+    Without model_id params, scans all models in the adapter.
+    With model_id params, only scans those models.
+    """
+    return service.find_connected_models(model_ids)
 
 
 @app.get("/graph", response_model=MegaGraph)

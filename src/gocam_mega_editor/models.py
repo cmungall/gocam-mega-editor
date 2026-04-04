@@ -72,3 +72,19 @@ class CausalEdgeCreate(BaseModel):
     source_activity_id: str
     target_activity_id: str
     predicate: str
+
+
+class SharedGene(BaseModel):
+    """A gene product shared between models."""
+
+    gene_id: str
+    label: str | None = None
+    model_ids: list[str]
+
+
+class ConnectedModels(BaseModel):
+    """Discovery result: models that share gene products."""
+
+    shared_genes: list[SharedGene]
+    model_ids: list[str]
+    connection_count: int

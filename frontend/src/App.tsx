@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ModelList } from "@/components/ModelList"
 import { GraphView } from "@/components/GraphView"
+import { MegaGraphView } from "@/components/MegaGraphView"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,7 @@ function App() {
               }
             />
             <Route path="/model/:modelId" element={<GraphView />} />
+            <Route path="/mega" element={<MegaGraphView />} />
           </Routes>
         </div>
       </BrowserRouter>
