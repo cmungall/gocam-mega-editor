@@ -118,6 +118,7 @@ export function ActivityEditPanel({ activity, model, onClose, onSaved }: Props) 
             <TermAutocomplete
               field="enabled_by"
               value={enabledBy}
+              valueLabel={resolveLabel(enabledBy, model)}
               taxon={model.taxon}
               placeholder="Search gene products..."
               onChange={(id) => setEnabledBy(id)}
@@ -128,6 +129,7 @@ export function ActivityEditPanel({ activity, model, onClose, onSaved }: Props) 
             <TermAutocomplete
               field="molecular_function"
               value={mf}
+              valueLabel={resolveLabel(mf, model)}
               placeholder="Search e.g. kinase activity..."
               onChange={(id) => setMf(id)}
             />
@@ -137,6 +139,7 @@ export function ActivityEditPanel({ activity, model, onClose, onSaved }: Props) 
             <TermAutocomplete
               field="biological_process"
               value={bp}
+              valueLabel={resolveLabel(bp, model)}
               placeholder="Search e.g. apoptosis..."
               onChange={(id) => setBp(id)}
             />
@@ -146,6 +149,7 @@ export function ActivityEditPanel({ activity, model, onClose, onSaved }: Props) 
             <TermAutocomplete
               field="occurs_in"
               value={cc}
+              valueLabel={resolveLabel(cc, model)}
               placeholder="Search e.g. nucleus..."
               onChange={(id) => setCc(id)}
             />
@@ -167,6 +171,7 @@ export function ActivityEditPanel({ activity, model, onClose, onSaved }: Props) 
                     <TermAutocomplete
                       field="evidence"
                       value={row.term}
+                      valueLabel={resolveLabel(row.term, model)}
                       placeholder="Search evidence codes..."
                       onChange={(id) => updateEvidenceRow(i, "term", id)}
                     />
