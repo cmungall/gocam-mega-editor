@@ -102,3 +102,60 @@ export function fetchGraph(modelIds: string[]): Promise<MegaGraph> {
   const params = modelIds.map((id) => `model_id=${encodeURIComponent(id)}`).join("&")
   return fetchJson(`${BASE}/graph?${params}`)
 }
+
+export function fetchPredicates(): Promise<Record<string, string>> {
+  return fetchJson(`${BASE}/predicates`)
+}
+
+// --- Mutations ---
+
+export interface ActivityUpdatePayload {
+  enabled_by_term?: string
+  molecular_function_term?: string
+  biological_process_term?: string
+  occurs_in_term?: string
+  evidence?: { term?: string; reference?: string; with_objects?: string[] }[]
+}
+
+export interface CausalEdgePayload {
+  source_activity_id: string
+  target_activity_id: string
+  predicate: string
+}
+
+async function mutateJson<T>(url: string, method: string, body?: unknown): Promise<T> {
+  const resp = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!resp.ok) {
+    const detail = await resp.text()
+    throw new Error(`${resp.status}: ${detail}`)
+  }
+  return resp.json() as Promise<T>
+}
+
+export function updateActivity(
+  modelId: string,
+  activityId: string,
+  payload: ActivityUpdatePayload,
+): Promise<Activity> {
+  return mutateJson(`${BASE}/model/${modelId}/activity/${activityId}`, "PATCH", payload)
+}
+
+export function createCausalEdge(modelId: string, payload: CausalEdgePayload): Promise<CausalAssociation> {
+  return mutateJson(`${BASE}/model/${modelId}/causal-edge`, "POST", payload)
+}
+
+export function deleteCausalEdge(
+  modelId: string,
+  sourceActivityId: string,
+  targetActivityId: string,
+): Promise<void> {
+  const params = new URLSearchParams({
+    source_activity_id: sourceActivityId,
+    target_activity_id: targetActivityId,
+  })
+  return mutateJson(`${BASE}/model/${modelId}/causal-edge?${params}`, "DELETE")
+}

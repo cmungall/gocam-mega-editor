@@ -46,3 +46,29 @@ class MegaGraph(BaseModel):
     model_count: int
     node_count: int
     edge_count: int
+
+
+class EvidenceInput(BaseModel):
+    """Evidence for an assertion."""
+
+    term: str | None = None
+    reference: str | None = None
+    with_objects: list[str] | None = None
+
+
+class ActivityUpdate(BaseModel):
+    """Partial update to an activity's associations."""
+
+    enabled_by_term: str | None = None
+    molecular_function_term: str | None = None
+    biological_process_term: str | None = None
+    occurs_in_term: str | None = None
+    evidence: list[EvidenceInput] | None = None
+
+
+class CausalEdgeCreate(BaseModel):
+    """Create a new causal association between two activities."""
+
+    source_activity_id: str
+    target_activity_id: str
+    predicate: str

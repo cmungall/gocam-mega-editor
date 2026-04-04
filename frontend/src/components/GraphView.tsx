@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ReactFlow,
   Background,
@@ -12,11 +12,13 @@ import {
   type Edge,
   type OnNodesChange,
   type OnEdgesChange,
+  type OnConnect,
   type NodeMouseHandler,
+  type Connection,
   MarkerType,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, Pencil } from "lucide-react"
 
 import { fetchModel, fetchGraph, type GoCamModel, type Activity } from "@/lib/api"
 import {
@@ -29,6 +31,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { ActivityNode, type ActivityNodeData } from "./ActivityNode"
 import { ActivityDetailPanel } from "./ActivityDetailPanel"
+import { ActivityEditPanel } from "./ActivityEditPanel"
+import { NewEdgeDialog } from "./NewEdgeDialog"
 import { ProcessLegend } from "./ProcessLegend"
 
 const nodeTypes = { activity: ActivityNode }
@@ -157,7 +161,10 @@ function buildEdges(activities: Activity[], model: GoCamModel): Edge[] {
 
 export function GraphView() {
   const { modelId } = useParams<{ modelId: string }>()
+  const queryClient = useQueryClient()
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [pendingConnection, setPendingConnection] = useState<Connection | null>(null)
 
   const { data: model, isLoading: modelLoading } = useQuery({
     queryKey: ["model", modelId],
@@ -197,7 +204,7 @@ export function GraphView() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
 
-  // Sync when model loads
+  // Sync when model loads or changes (after save)
   useMemo(() => {
     if (initialNodes.length > 0) setNodes(initialNodes)
   }, [initialNodes, setNodes])
@@ -207,6 +214,7 @@ export function GraphView() {
 
   const onNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
+      // Toggle inline expansion
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id === node.id) {
@@ -216,6 +224,7 @@ export function GraphView() {
           return n
         })
       )
+      // Show detail/edit panel
       const activity = model?.activities?.find((a) => a.id === node.id) ?? null
       setSelectedActivity((prev) =>
         prev?.id === node.id ? null : activity
@@ -223,6 +232,30 @@ export function GraphView() {
     },
     [model, setNodes]
   )
+
+  // Handle drag-to-connect: opens the predicate picker dialog
+  const onConnect: OnConnect = useCallback(
+    (connection) => {
+      if (connection.source && connection.target && connection.source !== connection.target) {
+        setPendingConnection(connection)
+      }
+    },
+    []
+  )
+
+  function handleEdgeCreated() {
+    // Refetch model to get the new edge
+    queryClient.invalidateQueries({ queryKey: ["model", modelId] })
+    setSelectedActivity(null)
+  }
+
+  function handleActivitySaved() {
+    // After save, re-select the updated activity from fresh data
+    if (selectedActivity && model) {
+      const updated = model.activities?.find((a) => a.id === selectedActivity.id)
+      if (updated) setSelectedActivity(updated)
+    }
+  }
 
   if (modelLoading) {
     return (
@@ -250,8 +283,19 @@ export function GraphView() {
             <p className="text-sm font-semibold truncate">{model.title}</p>
             <p className="text-[10px] text-muted-foreground font-mono">{model.id}</p>
           </div>
-          <div className="ml-auto text-xs text-muted-foreground">
-            {model.activities?.length ?? 0} activities
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {model.activities?.length ?? 0} activities
+            </span>
+            <Button
+              variant={editMode ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setEditMode(!editMode)}
+            >
+              <Pencil className="h-3 w-3 mr-1" />
+              {editMode ? "Editing" : "Edit"}
+            </Button>
           </div>
         </div>
 
@@ -263,11 +307,13 @@ export function GraphView() {
             onNodesChange={onNodesChange as OnNodesChange<Node>}
             onEdgesChange={onEdgesChange as OnEdgesChange<Edge>}
             onNodeClick={onNodeClick}
+            onConnect={editMode ? onConnect : undefined}
             nodeTypes={nodeTypes}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             minZoom={0.1}
             maxZoom={4}
+            connectOnClick={editMode}
           >
             <Background gap={20} size={1} />
             <Controls />
@@ -281,15 +327,44 @@ export function GraphView() {
             />
           </ReactFlow>
           <ProcessLegend processColors={colorMap} processLabels={processLabels} />
+          {editMode && (
+            <div className="absolute bottom-2 left-14 z-10 bg-card/90 backdrop-blur border rounded px-2 py-1">
+              <p className="text-[10px] text-muted-foreground">
+                Drag from one node handle to another to create a causal edge
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Detail panel */}
+      {/* Side panel: edit mode or read-only */}
       {selectedActivity && model && (
-        <ActivityDetailPanel
-          activity={selectedActivity}
+        editMode ? (
+          <ActivityEditPanel
+            key={selectedActivity.id}
+            activity={selectedActivity}
+            model={model}
+            onClose={() => setSelectedActivity(null)}
+            onSaved={handleActivitySaved}
+          />
+        ) : (
+          <ActivityDetailPanel
+            activity={selectedActivity}
+            model={model}
+            onClose={() => setSelectedActivity(null)}
+          />
+        )
+      )}
+
+      {/* New edge dialog */}
+      {pendingConnection && model && (
+        <NewEdgeDialog
+          open={!!pendingConnection}
+          sourceActivityId={pendingConnection.source!}
+          targetActivityId={pendingConnection.target!}
           model={model}
-          onClose={() => setSelectedActivity(null)}
+          onClose={() => setPendingConnection(null)}
+          onCreated={handleEdgeCreated}
         />
       )}
     </div>

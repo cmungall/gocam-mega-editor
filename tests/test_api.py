@@ -1,8 +1,7 @@
 """Tests for the FastAPI endpoints."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 from gocam.datamodel import (
     Activity,
     CausalAssociation,
@@ -80,10 +79,7 @@ def _make_fake_model(model_id: str = "568b0f9600000284") -> Model:
 
 def test_get_model(client):
     fake_model = _make_fake_model()
-    with patch.object(
-        type(client.app.state) if hasattr(client.app, "state") else type(None),
-        "__init__",
-    ) if False else patch(
+    with patch(
         "gocam_mega_editor.service.GoCamService.get_model",
         return_value=fake_model,
     ):
@@ -107,11 +103,9 @@ def test_get_graph(client):
     assert data["model_count"] == 1
     assert data["node_count"] == 2
     assert data["edge_count"] == 1
-    # Check node structure
     node_ids = {n["id"] for n in data["nodes"]}
     assert "UniProtKB:P12345" in node_ids
     assert "UniProtKB:P67890" in node_ids
-    # Check edge structure
     edge = data["edges"][0]
     assert edge["source"] == "UniProtKB:P12345"
     assert edge["target"] == "UniProtKB:P67890"
@@ -143,3 +137,105 @@ def test_graph_missing_model_ids(client):
     """graph endpoint requires at least one model_id."""
     resp = client.get("/graph")
     assert resp.status_code == 422
+
+
+# --- CRUD tests ---
+
+
+def test_update_activity_gene_product(client):
+    """PATCH updates the enabled_by term on an activity."""
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.patch(
+            "/model/568b0f9600000284/activity/activity_1",
+            json={"enabled_by_term": "UniProtKB:Q99999"},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["enabled_by"]["term"] == "UniProtKB:Q99999"
+
+
+def test_update_activity_molecular_function(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.patch(
+            "/model/568b0f9600000284/activity/activity_2",
+            json={
+                "molecular_function_term": "GO:0004674",
+                "evidence": [{"term": "ECO:0000314", "reference": "PMID:12345678"}],
+            },
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["molecular_function"]["term"] == "GO:0004674"
+    assert data["molecular_function"]["evidence"][0]["reference"] == "PMID:12345678"
+
+
+def test_update_activity_not_found(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.patch(
+            "/model/568b0f9600000284/activity/nonexistent",
+            json={"enabled_by_term": "UniProtKB:Q99999"},
+        )
+    assert resp.status_code == 404
+
+
+def test_create_causal_edge(client):
+    """POST creates a new causal association."""
+    fake = _make_fake_model()
+    # activity_2 starts with no causal_associations
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.post(
+            "/model/568b0f9600000284/causal-edge",
+            json={
+                "source_activity_id": "activity_2",
+                "target_activity_id": "activity_1",
+                "predicate": "RO:0002630",
+            },
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["predicate"] == "RO:0002630"
+    assert data["downstream_activity"] == "activity_1"
+    # Verify it's actually on the model
+    assert len(fake.activities[1].causal_associations) == 1
+
+
+def test_create_causal_edge_target_not_found(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.post(
+            "/model/568b0f9600000284/causal-edge",
+            json={
+                "source_activity_id": "activity_1",
+                "target_activity_id": "nonexistent",
+                "predicate": "RO:0002629",
+            },
+        )
+    assert resp.status_code == 404
+
+
+def test_delete_causal_edge(client):
+    fake = _make_fake_model()
+    # activity_1 has a causal_association to activity_2
+    assert len(fake.activities[0].causal_associations) == 1
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.request(
+            "DELETE",
+            "/model/568b0f9600000284/causal-edge",
+            params={
+                "source_activity_id": "activity_1",
+                "target_activity_id": "activity_2",
+            },
+        )
+    assert resp.status_code == 200
+    assert len(fake.activities[0].causal_associations) == 0
+
+
+def test_list_predicates(client):
+    resp = client.get("/predicates")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "RO:0002629" in data
+    assert data["RO:0002629"] == "directly positively regulates"

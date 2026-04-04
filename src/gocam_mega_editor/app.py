@@ -1,9 +1,9 @@
 """FastAPI application for the GO-CAM Mega Editor backend."""
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from gocam_mega_editor.models import MegaGraph, ModelSummary
+from gocam_mega_editor.models import ActivityUpdate, CausalEdgeCreate, MegaGraph, ModelSummary
 from gocam_mega_editor.service import GoCamService
 
 # Common RO relation labels for causal predicates used in GO-CAM
@@ -79,6 +79,46 @@ def get_graph(
         /graph?model_id=abc&model_id=def
     """
     return service.get_mega_graph(model_ids)
+
+
+@app.patch("/model/{model_id}/activity/{activity_id:path}")
+def update_activity(model_id: str, activity_id: str, update: ActivityUpdate) -> dict:
+    """Update an activity's associations (gene product, MF, BP, CC, evidence)."""
+    try:
+        activity = service.update_activity(model_id, activity_id, update)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return activity.model_dump(exclude_none=True)
+
+
+@app.post("/model/{model_id}/causal-edge")
+def create_causal_edge(model_id: str, edge: CausalEdgeCreate) -> dict:
+    """Create a new causal association between two activities."""
+    try:
+        assoc = service.add_causal_edge(model_id, edge)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return assoc.model_dump(exclude_none=True)
+
+
+@app.delete("/model/{model_id}/causal-edge")
+def delete_causal_edge(
+    model_id: str,
+    source_activity_id: str = Query(),
+    target_activity_id: str = Query(),
+) -> dict:
+    """Delete a causal association between two activities."""
+    try:
+        service.delete_causal_edge(model_id, source_activity_id, target_activity_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"status": "deleted"}
+
+
+@app.get("/predicates")
+def list_predicates() -> dict[str, str]:
+    """List available causal predicates with labels."""
+    return PREDICATE_LABELS
 
 
 @app.get("/health")
