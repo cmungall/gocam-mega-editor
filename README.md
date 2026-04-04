@@ -4,6 +4,35 @@ A modern, full-stack visual pathway editor for GO-CAM (Gene Ontology Causal Acti
 
 Think of it like Google Maps for biology: zoom out to see the full network of pathways, zoom in to edit individual activity nodes and causal connections.
 
+## Screenshots
+
+### Model Browser
+Searchable list of GO-CAM models with group badges, dates, and contributor info. Filter by title, ID, group, or contributor name.
+
+![Model list](docs/screenshots/01-model-list.png)
+
+![Search filtering](docs/screenshots/02-search.png)
+
+### Graph Visualization
+Activity graph with nodes color-coded by biological process and edges styled by regulation type. Legend shows process colors and edge types. MiniMap provides overview navigation.
+
+![Graph view — C. elegans MAPK cascade](docs/screenshots/03-graph-view.png)
+
+### Semantic Zoom
+Click any node to expand it inline and open the detail panel showing gene product, molecular function, biological process, cellular component, and full evidence with ECO codes and PMIDs.
+
+![Detail panel](docs/screenshots/04-detail-panel.png)
+
+### Editing
+Toggle edit mode to modify activities. Edit gene product, molecular function, biological process, cellular component, and evidence. Drag between node handles to create new causal edges with a predicate picker.
+
+![Edit panel](docs/screenshots/05-edit-panel.png)
+
+### Multiple Pathway Types
+Works with different pathway topologies — from branching signaling cascades to linear metabolic pathways.
+
+![Canonical glycolysis](docs/screenshots/06-glycolysis.png)
+
 ## Architecture
 
 ```
@@ -11,7 +40,7 @@ Think of it like Google Maps for biology: zoom out to see the full network of pa
 │  Frontend (React + TypeScript)                  │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────┐│
 │  │ Model    │ │ Graph    │ │ Activity Detail  ││
-│  │ List     │ │ View     │ │ Panel            ││
+│  │ List     │ │ View     │ │ / Edit Panel     ││
 │  │          │ │(ReactFlow)│ │                  ││
 │  └──────────┘ └──────────┘ └──────────────────┘│
 │  Vite · shadcn/ui · TanStack Query · Tailwind  │
@@ -21,7 +50,7 @@ Think of it like Google Maps for biology: zoom out to see the full network of pa
 │  Backend (Python + FastAPI)                     │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────┐│
 │  │ /models  │ │/model/{id}│ │ /graph           ││
-│  │ (index)  │ │ (detail) │ │ (mega-graph)     ││
+│  │ (index)  │ │ (CRUD)   │ │ (mega-graph)     ││
 │  └──────────┘ └──────────┘ └──────────────────┘│
 │  GoCamService · MinervaWrapper · NetworkX       │
 └──────────────────┬──────────────────────────────┘
@@ -37,6 +66,9 @@ Think of it like Google Maps for biology: zoom out to see the full network of pa
 - **FastAPI** app wrapping the [`gocam`](https://github.com/geneontology/gocam) Python package
 - **`/models`** — paginated model index from the GO public S3 bucket
 - **`/model/{id}`** — full GO-CAM model fetched from the Minerva API, serialized as JSON with predicate label enrichment
+- **`PATCH /model/{id}/activity/{activity_id}`** — update gene product, molecular function, biological process, cellular component, evidence
+- **`POST /model/{id}/causal-edge`** — create causal associations between activities
+- **`DELETE /model/{id}/causal-edge`** — remove causal associations
 - **`/graph?model_id=X&model_id=Y`** — interconnected gene-to-gene mega-graph via the gocam NetworkX translator
 - In-memory model caching for fast repeated access
 
@@ -54,6 +86,10 @@ Think of it like Google Maps for biology: zoom out to see the full network of pa
 - **Semantic zoom** — click any node to:
   - Expand it inline (gene product, molecular function, biological process, cellular component)
   - Open a detail panel with full evidence (ECO codes, PMIDs, with_objects)
+- **Editing** — toggle edit mode to:
+  - Modify gene product, molecular function, biological process, cellular component
+  - Add/remove evidence with ECO codes and PMID references
+  - Drag between nodes to create causal edges with predicate picker
 - **Searchable model list** — filter by title, ID, contributor, or group
 - **MiniMap** with process-colored nodes for overview navigation
 
@@ -91,7 +127,7 @@ Open http://localhost:5173
 ### Run Tests
 
 ```bash
-just test          # backend pytest
+just test          # backend pytest (15 tests)
 cd frontend && npx tsc --noEmit  # frontend type check
 ```
 
@@ -101,7 +137,11 @@ cd frontend && npx tsc --noEmit  # frontend type check
 |----------|--------|-------------|
 | `/models` | GET | List models (query: `limit`, `offset`) |
 | `/model/{id}` | GET | Full model as JSON |
+| `/model/{id}/activity/{activity_id}` | PATCH | Update activity associations and evidence |
+| `/model/{id}/causal-edge` | POST | Create causal association between activities |
+| `/model/{id}/causal-edge` | DELETE | Remove causal association (query: `source_activity_id`, `target_activity_id`) |
 | `/graph` | GET | Mega-graph (query: `model_id`, repeatable) |
+| `/predicates` | GET | List available causal predicates with labels |
 | `/health` | GET | Health check |
 
 ## Project Structure
@@ -111,22 +151,25 @@ gocam-mega-editor/
 ├── src/gocam_mega_editor/
 │   ├── app.py          # FastAPI routes
 │   ├── service.py      # GoCamService (wraps gocam package)
-│   ├── models.py       # Pydantic response models
+│   ├── models.py       # Pydantic request/response models
 │   └── cli.py          # CLI (typer)
 ├── tests/
 │   ├── conftest.py     # Fixtures
-│   └── test_api.py     # API tests
+│   └── test_api.py     # API tests (15 tests)
 ├── frontend/
 │   └── src/
 │       ├── components/
-│       │   ├── ModelList.tsx         # Searchable model browser
-│       │   ├── GraphView.tsx         # React Flow graph + layout
-│       │   ├── ActivityNode.tsx      # Custom node with process colors
-│       │   ├── ActivityDetailPanel.tsx # Evidence detail sidebar
-│       │   └── ProcessLegend.tsx     # Color legend overlay
+│       │   ├── ModelList.tsx          # Searchable model browser
+│       │   ├── GraphView.tsx          # React Flow graph + layout + edit mode
+│       │   ├── ActivityNode.tsx       # Custom node with process colors
+│       │   ├── ActivityDetailPanel.tsx # Read-only evidence detail sidebar
+│       │   ├── ActivityEditPanel.tsx   # Editable form for activity CRUD
+│       │   ├── NewEdgeDialog.tsx       # Predicate picker for new causal edges
+│       │   └── ProcessLegend.tsx      # Color legend overlay
 │       └── lib/
-│           ├── api.ts               # API client + types
-│           └── colors.ts            # Process color palette + edge classification
+│           ├── api.ts                 # API client, types, mutations
+│           └── colors.ts             # Process color palette + edge classification
+├── docs/screenshots/                  # Auto-generated screenshots
 ├── pyproject.toml
 ├── justfile
 └── README.md
