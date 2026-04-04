@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gocam-mega-editor"
+version = "0.1.0"
+description = "Visual mega-model editor for GO-CAM pathway networks"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "gocam",
+    "networkx>=3,<4",
+    "pydantic>=2,<3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<9",
+    "httpx>=0.28,<1",
+    "pytest-asyncio>=0.25,<1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[project.scripts]
+gocam-mega-editor = "gocam_mega_editor.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gocam_mega_editor"]
+
+[tool.ruff]
+src = ["src"]
