@@ -1,10 +1,9 @@
 """Shared fixtures for tests."""
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 from fastapi.testclient import TestClient
 
+from gocam_mega_editor.adapters import MinervaAdapter
 from gocam_mega_editor.app import app, service
 
 FAKE_INDEX = [
@@ -32,11 +31,14 @@ FAKE_INDEX = [
 @pytest.fixture
 def client():
     """Test client with mocked index (no real HTTP calls for listing)."""
-    service._index = FAKE_INDEX
-    service._models.clear()
+    adapter = service.adapter
+    if isinstance(adapter, MinervaAdapter):
+        adapter._index = FAKE_INDEX
+        adapter._cache.clear()
     yield TestClient(app)
-    service._index = None
-    service._models.clear()
+    if isinstance(adapter, MinervaAdapter):
+        adapter._index = None
+        adapter._cache.clear()
 
 
 @pytest.fixture

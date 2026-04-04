@@ -1,8 +1,11 @@
 """FastAPI application for the GO-CAM Mega Editor backend."""
 
+import os
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from gocam_mega_editor.adapters import InMemoryAdapter, MinervaAdapter
 from gocam_mega_editor.models import ActivityUpdate, CausalEdgeCreate, MegaGraph, ModelSummary
 from gocam_mega_editor.service import GoCamService
 
@@ -37,7 +40,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-service = GoCamService()
+def _make_adapter():
+    """Build adapter from GOCAM_ADAPTER env var.
+
+    Values:
+        minerva (default) — read from GO API, write to in-memory cache
+        memory — pure in-memory (no external calls)
+        file:/path/to/dir — in-memory + JSON file persistence
+        minerva:https://custom-endpoint/ — custom Minerva endpoint
+    """
+    spec = os.environ.get("GOCAM_ADAPTER", "minerva")
+    if spec == "memory":
+        return InMemoryAdapter()
+    if spec.startswith("file:"):
+        return InMemoryAdapter(storage_dir=spec.removeprefix("file:"))
+    if spec.startswith("minerva:"):
+        return MinervaAdapter(endpoint_base=spec.removeprefix("minerva:"))
+    return MinervaAdapter()
+
+
+service = GoCamService(adapter=_make_adapter())
 
 
 @app.get("/models", response_model=list[ModelSummary])

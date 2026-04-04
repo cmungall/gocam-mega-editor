@@ -1,4 +1,8 @@
-"""Core service layer wrapping the gocam package."""
+"""Core service layer for GO-CAM model operations.
+
+The service owns business logic (graph translation, activity mutation).
+Storage is delegated to a ModelAdapter implementation.
+"""
 
 import logging
 from dataclasses import dataclass, field
@@ -14,9 +18,9 @@ from gocam.datamodel import (
     Model,
     MolecularFunctionAssociation,
 )
-from gocam.translation.minerva_wrapper import MinervaWrapper
 from gocam.translation.networkx.model_network_translator import ModelNetworkTranslator
 
+from gocam_mega_editor.adapters import MinervaAdapter, ModelAdapter
 from gocam_mega_editor.models import (
     ActivityUpdate,
     CausalEdgeCreate,
@@ -32,37 +36,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GoCamService:
-    """Service for loading and querying GO-CAM models.
+    """Service for loading, querying, and editing GO-CAM models.
 
-    Wraps MinervaWrapper with an in-memory cache and provides
-    graph translation for the mega-model view.
+    All storage is delegated to the adapter. The service handles
+    graph translation, activity mutation, and response formatting.
     """
 
-    wrapper: MinervaWrapper = field(default_factory=MinervaWrapper)
+    adapter: ModelAdapter = field(default_factory=MinervaAdapter)
     translator: ModelNetworkTranslator = field(default_factory=ModelNetworkTranslator)
-    _models: dict[str, Model] = field(default_factory=dict)
-    _index: list[dict] | None = field(default=None)
-
-    def _fetch_index(self) -> list[dict]:
-        """Fetch the model index from the GO API."""
-        if self._index is None:
-            response = self.wrapper.session.get(self.wrapper.gocam_index_url)
-            response.raise_for_status()
-            self._index = response.json()
-        return self._index
 
     def list_models(self, limit: int = 100, offset: int = 0) -> list[ModelSummary]:
-        """List available GO-CAM models from the index.
-
-        >>> svc = GoCamService()
-        >>> summaries = svc.list_models(limit=2)
-        >>> all(isinstance(s, ModelSummary) for s in summaries)
-        True
-        """
-        index = self._fetch_index()
-        page = index[offset : offset + limit]
+        """List available GO-CAM models from the adapter."""
+        entries = self.adapter.list_summaries(limit=limit, offset=offset)
         summaries = []
-        for entry in page:
+        for entry in entries:
             gocam_url = entry.get("gocam", "")
             model_id = gocam_url.replace("http://model.geneontology.org/", "")
             summaries.append(
@@ -80,10 +67,11 @@ class GoCamService:
         return summaries
 
     def get_model(self, model_id: str) -> Model:
-        """Fetch a single GO-CAM model, using cache if available."""
-        if model_id not in self._models:
-            self._models[model_id] = self.wrapper.fetch_model(model_id)
-        return self._models[model_id]
+        """Fetch a single GO-CAM model via the adapter."""
+        model = self.adapter.get(model_id)
+        if model is None:
+            raise ValueError(f"Model {model_id} not found")
+        return model
 
     def _find_activity(self, model: Model, activity_id: str) -> Activity:
         """Find an activity by ID within a model, or raise ValueError."""
@@ -104,7 +92,7 @@ class GoCamService:
         ]
 
     def update_activity(self, model_id: str, activity_id: str, update: ActivityUpdate) -> Activity:
-        """Apply a partial update to an activity within a cached model."""
+        """Apply a partial update to an activity, then persist via adapter."""
         model = self.get_model(model_id)
         activity = self._find_activity(model, activity_id)
 
@@ -132,13 +120,13 @@ class GoCamService:
                 evidence=evidence,
             )
 
+        self.adapter.save(model)
         return activity
 
     def add_causal_edge(self, model_id: str, edge: CausalEdgeCreate) -> CausalAssociation:
-        """Add a causal association between two activities in a model."""
+        """Add a causal association between two activities, then persist."""
         model = self.get_model(model_id)
         source = self._find_activity(model, edge.source_activity_id)
-        # Validate target exists
         self._find_activity(model, edge.target_activity_id)
 
         assoc = CausalAssociation(
@@ -148,12 +136,14 @@ class GoCamService:
         if source.causal_associations is None:
             source.causal_associations = []
         source.causal_associations.append(assoc)
+
+        self.adapter.save(model)
         return assoc
 
     def delete_causal_edge(
         self, model_id: str, source_activity_id: str, target_activity_id: str
     ) -> None:
-        """Remove a causal association between two activities."""
+        """Remove a causal association between two activities, then persist."""
         model = self.get_model(model_id)
         source = self._find_activity(model, source_activity_id)
         if source.causal_associations:
@@ -162,13 +152,10 @@ class GoCamService:
                 for ca in source.causal_associations
                 if ca.downstream_activity != target_activity_id
             ]
+        self.adapter.save(model)
 
     def get_mega_graph(self, model_ids: list[str]) -> MegaGraph:
-        """Build an interconnected graph from multiple models.
-
-        Fetches each model, translates them all into a single NetworkX DiGraph,
-        then converts to our API response format.
-        """
+        """Build an interconnected graph from multiple models."""
         models = [self.get_model(mid) for mid in model_ids]
         nx_graph: nx.DiGraph = self.translator.translate_models(models)
 
