@@ -5,7 +5,10 @@ import os
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from pydantic import BaseModel as PydanticBaseModel
+
 from gocam_mega_editor.adapters import InMemoryAdapter, MinervaAdapter
+from gocam_mega_editor.lookup import OntologyLookup
 from gocam_mega_editor.models import ActivityUpdate, CausalEdgeCreate, ConnectedModels, MegaGraph, ModelConnections, ModelSummary
 from gocam_mega_editor.service import GoCamService
 
@@ -60,6 +63,33 @@ def _make_adapter():
 
 
 service = GoCamService(adapter=_make_adapter())
+lookup = OntologyLookup()
+
+
+class AutocompleteRequest(PydanticBaseModel):
+    field: str
+    query: str
+    taxon: str | None = None
+    limit: int = 10
+
+
+class AutocompleteItem(PydanticBaseModel):
+    id: str
+    label: str
+    category: str | None = None
+
+
+@app.post("/autocomplete", response_model=list[AutocompleteItem])
+def autocomplete(req: AutocompleteRequest) -> list[AutocompleteItem]:
+    """Field-aware ontology/gene product autocomplete.
+
+    Routes to OLS (ontology terms) or UniProt (gene products) based
+    on the field type, with branch constraints from the GO-CAM schema.
+
+    Fields: enabled_by, molecular_function, biological_process, occurs_in, evidence
+    """
+    results = lookup.search(req.field, req.query, taxon=req.taxon, limit=req.limit)
+    return [AutocompleteItem(id=r.id, label=r.label, category=r.category) for r in results]
 
 
 @app.get("/models", response_model=list[ModelSummary])

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { TermAutocomplete } from "./TermAutocomplete"
 
 interface Props {
   activity: Activity
@@ -113,60 +114,41 @@ export function ActivityEditPanel({ activity, model, onClose, onSaved }: Props) 
         <div className="space-y-4 text-sm">
           <p className="text-[10px] text-muted-foreground font-mono">{activity.id}</p>
 
-          <FieldRow label="Gene Product (enabled_by)" hint="e.g. UniProtKB:P12345">
-            <Input
+          <FieldRow label="Gene Product (enabled_by)" hint="Search by gene name">
+            <TermAutocomplete
+              field="enabled_by"
               value={enabledBy}
-              onChange={(e) => setEnabledBy(e.target.value)}
-              className="h-8 text-xs"
-              placeholder="UniProtKB:P12345"
+              taxon={model.taxon}
+              placeholder="Search gene products..."
+              onChange={(id) => setEnabledBy(id)}
             />
-            {enabledBy && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {resolveLabel(enabledBy, model)}
-              </p>
-            )}
           </FieldRow>
 
-          <FieldRow label="Molecular Function" hint="GO term ID">
-            <Input
+          <FieldRow label="Molecular Function" hint="Search GO molecular functions">
+            <TermAutocomplete
+              field="molecular_function"
               value={mf}
-              onChange={(e) => setMf(e.target.value)}
-              className="h-8 text-xs"
-              placeholder="GO:0003674"
+              placeholder="Search e.g. kinase activity..."
+              onChange={(id) => setMf(id)}
             />
-            {mf && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {resolveLabel(mf, model)}
-              </p>
-            )}
           </FieldRow>
 
-          <FieldRow label="Biological Process" hint="GO term ID">
-            <Input
+          <FieldRow label="Biological Process" hint="Search GO biological processes">
+            <TermAutocomplete
+              field="biological_process"
               value={bp}
-              onChange={(e) => setBp(e.target.value)}
-              className="h-8 text-xs"
-              placeholder="GO:0008150"
+              placeholder="Search e.g. apoptosis..."
+              onChange={(id) => setBp(id)}
             />
-            {bp && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {resolveLabel(bp, model)}
-              </p>
-            )}
           </FieldRow>
 
-          <FieldRow label="Cellular Component" hint="GO term ID">
-            <Input
+          <FieldRow label="Cellular Component" hint="Search GO cellular components">
+            <TermAutocomplete
+              field="occurs_in"
               value={cc}
-              onChange={(e) => setCc(e.target.value)}
-              className="h-8 text-xs"
-              placeholder="GO:0005575"
+              placeholder="Search e.g. nucleus..."
+              onChange={(id) => setCc(id)}
             />
-            {cc && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {resolveLabel(cc, model)}
-              </p>
-            )}
           </FieldRow>
 
           <Separator />
@@ -182,11 +164,11 @@ export function ActivityEditPanel({ activity, model, onClose, onSaved }: Props) 
               {evidence.map((row, i) => (
                 <div key={i} className="flex gap-1.5 items-start">
                   <div className="flex-1 space-y-1">
-                    <Input
+                    <TermAutocomplete
+                      field="evidence"
                       value={row.term}
-                      onChange={(e) => updateEvidenceRow(i, "term", e.target.value)}
-                      className="h-7 text-[10px]"
-                      placeholder="ECO:0000314"
+                      placeholder="Search evidence codes..."
+                      onChange={(id) => updateEvidenceRow(i, "term", id)}
                     />
                     <Input
                       value={row.reference}

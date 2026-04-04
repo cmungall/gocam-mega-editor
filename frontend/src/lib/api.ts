@@ -156,6 +156,21 @@ export function fetchModelConnections(modelId: string): Promise<ModelConnections
   return fetchJson(`${BASE}/model/${modelId}/connections`)
 }
 
+export interface AutocompleteItem {
+  id: string
+  label: string
+  category: string | null
+}
+
+export function autocomplete(
+  field: string,
+  query: string,
+  taxon?: string | null,
+  limit = 10,
+): Promise<AutocompleteItem[]> {
+  return mutateJson(`${BASE}/autocomplete`, "POST", { field, query, taxon, limit })
+}
+
 export function fetchPredicates(): Promise<Record<string, string>> {
   return fetchJson(`${BASE}/predicates`)
 }
