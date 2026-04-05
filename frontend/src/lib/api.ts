@@ -220,10 +220,14 @@ export function deleteCausalEdge(
   modelId: string,
   sourceActivityId: string,
   targetActivityId: string,
+  predicate?: string,
 ): Promise<void> {
   const params = new URLSearchParams({
     source_activity_id: sourceActivityId,
     target_activity_id: targetActivityId,
   })
+  if (predicate) {
+    params.set("predicate", predicate)
+  }
   return mutateJson(`${BASE}/model/${modelId}/causal-edge?${params}`, "DELETE")
 }

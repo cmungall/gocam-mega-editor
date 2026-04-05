@@ -41,6 +41,13 @@ from gocam_mega_editor.models import (
 
 logger = logging.getLogger(__name__)
 
+EDITABLE_ACTIVITY_ASSOCIATIONS = (
+    "enabled_by",
+    "molecular_function",
+    "part_of",
+    "occurs_in",
+)
+
 
 @dataclass
 class GoCamService:
@@ -99,34 +106,62 @@ class GoCamService:
             for ev in inputs
         ]
 
+    @staticmethod
+    def _current_evidence(activity: Activity, association_name: str) -> list[EvidenceItem] | None:
+        association = getattr(activity, association_name, None)
+        return association.evidence if association else None
+
+    @staticmethod
+    def _apply_shared_evidence(activity: Activity, evidence: list[EvidenceItem]) -> None:
+        for association_name in EDITABLE_ACTIVITY_ASSOCIATIONS:
+            association = getattr(activity, association_name, None)
+            if association is not None:
+                association.evidence = evidence
+
     def update_activity(self, model_id: str, activity_id: str, update: ActivityUpdate) -> Activity:
         """Apply a partial update to an activity, then persist via adapter."""
         model = self.get_model(model_id)
         activity = self._find_activity(model, activity_id)
+        evidence = self._build_evidence(update.evidence) if update.evidence is not None else None
 
         if update.enabled_by_term is not None:
-            activity.enabled_by = EnabledByGeneProductAssociation(
-                term=update.enabled_by_term,
-                evidence=self._build_evidence(update.evidence) if update.evidence else None,
+            activity.enabled_by = (
+                EnabledByGeneProductAssociation(
+                    term=update.enabled_by_term,
+                    evidence=evidence if update.evidence is not None else self._current_evidence(activity, "enabled_by"),
+                )
+                if update.enabled_by_term
+                else None
             )
         if update.molecular_function_term is not None:
-            evidence = self._build_evidence(update.evidence) if update.evidence else None
-            activity.molecular_function = MolecularFunctionAssociation(
-                term=update.molecular_function_term,
-                evidence=evidence,
+            activity.molecular_function = (
+                MolecularFunctionAssociation(
+                    term=update.molecular_function_term,
+                    evidence=evidence if update.evidence is not None else self._current_evidence(activity, "molecular_function"),
+                )
+                if update.molecular_function_term
+                else None
             )
         if update.biological_process_term is not None:
-            evidence = self._build_evidence(update.evidence) if update.evidence else None
-            activity.part_of = BiologicalProcessAssociation(
-                term=update.biological_process_term,
-                evidence=evidence,
+            activity.part_of = (
+                BiologicalProcessAssociation(
+                    term=update.biological_process_term,
+                    evidence=evidence if update.evidence is not None else self._current_evidence(activity, "part_of"),
+                )
+                if update.biological_process_term
+                else None
             )
         if update.occurs_in_term is not None:
-            evidence = self._build_evidence(update.evidence) if update.evidence else None
-            activity.occurs_in = CellularAnatomicalEntityAssociation(
-                term=update.occurs_in_term,
-                evidence=evidence,
+            activity.occurs_in = (
+                CellularAnatomicalEntityAssociation(
+                    term=update.occurs_in_term,
+                    evidence=evidence if update.evidence is not None else self._current_evidence(activity, "occurs_in"),
+                )
+                if update.occurs_in_term
+                else None
             )
+        if update.evidence is not None:
+            self._apply_shared_evidence(activity, evidence)
 
         self.adapter.save(model)
         return activity
@@ -149,7 +184,11 @@ class GoCamService:
         return assoc
 
     def delete_causal_edge(
-        self, model_id: str, source_activity_id: str, target_activity_id: str
+        self,
+        model_id: str,
+        source_activity_id: str,
+        target_activity_id: str,
+        predicate: str | None = None,
     ) -> None:
         """Remove a causal association between two activities, then persist."""
         model = self.get_model(model_id)
@@ -159,6 +198,7 @@ class GoCamService:
                 ca
                 for ca in source.causal_associations
                 if ca.downstream_activity != target_activity_id
+                or (predicate is not None and ca.predicate != predicate)
             ]
         self.adapter.save(model)
 

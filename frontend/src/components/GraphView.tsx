@@ -22,7 +22,6 @@ import { ArrowLeft, Loader2, Pencil } from "lucide-react"
 
 import {
   fetchModel,
-  fetchGraph,
   fetchModelConnections,
   type GoCamModel,
   type Activity,
@@ -175,10 +174,14 @@ function buildEdges(activities: Activity[], model: GoCamModel): Edge[] {
   return edges
 }
 
+function activityPanelKey(activity: Activity): string {
+  return JSON.stringify(activity)
+}
+
 export function GraphView() {
   const { modelId } = useParams<{ modelId: string }>()
   const queryClient = useQueryClient()
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null)
 
@@ -219,13 +222,14 @@ export function GraphView() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const selectedActivity = model?.activities?.find((activity) => activity.id === selectedActivityId) ?? null
 
   // Sync when model loads or changes (after save)
   useEffect(() => {
-    if (initialNodes.length > 0) setNodes(initialNodes)
+    setNodes(initialNodes)
   }, [initialNodes, setNodes])
   useEffect(() => {
-    if (initialEdges.length > 0) setEdges(initialEdges)
+    setEdges(initialEdges)
   }, [initialEdges, setEdges])
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -241,12 +245,9 @@ export function GraphView() {
         })
       )
       // Show detail/edit panel
-      const activity = model?.activities?.find((a) => a.id === node.id) ?? null
-      setSelectedActivity((prev) =>
-        prev?.id === node.id ? null : activity
-      )
+      setSelectedActivityId((prev) => (prev === node.id ? null : node.id))
     },
-    [model, setNodes]
+    [setNodes]
   )
 
   // Handle drag-to-connect: opens the predicate picker dialog
@@ -262,15 +263,7 @@ export function GraphView() {
   function handleEdgeCreated() {
     // Refetch model to get the new edge
     queryClient.invalidateQueries({ queryKey: ["model", modelId] })
-    setSelectedActivity(null)
-  }
-
-  function handleActivitySaved() {
-    // After save, re-select the updated activity from fresh data
-    if (selectedActivity && model) {
-      const updated = model.activities?.find((a) => a.id === selectedActivity.id)
-      if (updated) setSelectedActivity(updated)
-    }
+    setSelectedActivityId(null)
   }
 
   if (modelLoading) {
@@ -357,17 +350,17 @@ export function GraphView() {
       {selectedActivity && model && (
         editMode ? (
           <ActivityEditPanel
-            key={selectedActivity.id}
+            key={activityPanelKey(selectedActivity)}
             activity={selectedActivity}
             model={model}
-            onClose={() => setSelectedActivity(null)}
-            onSaved={handleActivitySaved}
+            onClose={() => setSelectedActivityId(null)}
+            onSaved={() => {}}
           />
         ) : (
           <ActivityDetailPanel
             activity={selectedActivity}
             model={model}
-            onClose={() => setSelectedActivity(null)}
+            onClose={() => setSelectedActivityId(null)}
             geneConnection={
               connections?.connections.find(
                 (c) => c.gene_id === selectedActivity.enabled_by?.term

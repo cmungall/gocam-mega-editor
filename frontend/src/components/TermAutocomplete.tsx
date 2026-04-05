@@ -15,10 +15,13 @@ interface Props {
   onChange: (id: string, label: string) => void
 }
 
+const EMPTY_ITEMS: AutocompleteItem[] = []
+
 export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder, onChange }: Props) {
-  // The actual selected term ID (what gets saved)
-  const [selectedId, setSelectedId] = useState(value)
-  const [selectedLabel, setSelectedLabel] = useState(valueLabel ?? "")
+  const [optimisticSelection, setOptimisticSelection] = useState({
+    id: value,
+    label: valueLabel ?? "",
+  })
   // What the user is typing in the search box
   const [searchText, setSearchText] = useState("")
   const [isSearching, setIsSearching] = useState(false)
@@ -26,12 +29,6 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
   const [open, setOpen] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
-
-  // Sync external value changes
-  useEffect(() => {
-    setSelectedId(value)
-    if (valueLabel) setSelectedLabel(valueLabel)
-  }, [value, valueLabel])
 
   // Debounce search text
   useEffect(() => {
@@ -48,9 +45,10 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
     staleTime: 60_000,
   })
 
-  const items = results ?? []
-
-  useEffect(() => { setSelectedIndex(0) }, [items])
+  const items = results ?? EMPTY_ITEMS
+  const activeIndex = Math.min(selectedIndex, Math.max(items.length - 1, 0))
+  const selectedLabel =
+    valueLabel || (optimisticSelection.id === value ? optimisticSelection.label : "")
 
   // Close on outside click
   useEffect(() => {
@@ -66,11 +64,11 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
 
   const selectItem = useCallback(
     (item: AutocompleteItem) => {
-      setSelectedId(item.id)
-      setSelectedLabel(item.label)
+      setOptimisticSelection({ id: item.id, label: item.label })
       setSearchText("")
       setIsSearching(false)
       setOpen(false)
+      setSelectedIndex(0)
       onChange(item.id, item.label)
     },
     [onChange]
@@ -92,7 +90,7 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
       setSelectedIndex((i) => Math.max(i - 1, 0))
     } else if (e.key === "Enter") {
       e.preventDefault()
-      selectItem(items[selectedIndex])
+      selectItem(items[activeIndex])
     } else if (e.key === "Escape") {
       setIsSearching(false)
       setOpen(false)
@@ -102,18 +100,19 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
   function startSearch() {
     setIsSearching(true)
     setSearchText("")
+    setSelectedIndex(0)
   }
 
   function clearSelection() {
-    setSelectedId("")
-    setSelectedLabel("")
+    setOptimisticSelection({ id: "", label: "" })
     setSearchText("")
     setIsSearching(true)
+    setSelectedIndex(0)
     onChange("", "")
   }
 
   // Show the selected value display OR the search input
-  if (selectedId && !isSearching) {
+  if (value && !isSearching) {
     return (
       <div
         ref={containerRef}
@@ -122,11 +121,11 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
       >
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-medium truncate">
-            {selectedLabel || selectedId}
+            {selectedLabel || value}
           </p>
           {selectedLabel && (
             <p className="text-[9px] text-muted-foreground font-mono truncate">
-              {selectedId}
+              {value}
             </p>
           )}
         </div>
@@ -150,6 +149,7 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
           onChange={(e) => {
             setSearchText(e.target.value)
             setOpen(true)
+            setSelectedIndex(0)
           }}
           onFocus={() => { if (debouncedQuery.length >= 2) setOpen(true) }}
           onKeyDown={handleKeyDown}
@@ -169,7 +169,7 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
               className={`
                 w-full text-left px-2.5 py-1.5 text-[11px] flex items-center gap-2
                 hover:bg-accent/50 transition-colors
-                ${i === selectedIndex ? "bg-accent" : ""}
+                ${i === activeIndex ? "bg-accent" : ""}
               `}
               onMouseEnter={() => setSelectedIndex(i)}
               onClick={() => selectItem(item)}

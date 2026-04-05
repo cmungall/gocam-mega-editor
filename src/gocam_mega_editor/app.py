@@ -176,10 +176,11 @@ def delete_causal_edge(
     model_id: str,
     source_activity_id: str = Query(),
     target_activity_id: str = Query(),
+    predicate: str | None = Query(default=None),
 ) -> dict:
     """Delete a causal association between two activities."""
     try:
-        service.delete_causal_edge(model_id, source_activity_id, target_activity_id)
+        service.delete_causal_edge(model_id, source_activity_id, target_activity_id, predicate)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return {"status": "deleted"}

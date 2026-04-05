@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import {
@@ -36,6 +36,7 @@ const SPECIES_COLORS: Record<string, { bg: string; border: string; text: string 
   "NCBITaxon:559292": { bg: "#ffedd5", border: "#f97316", text: "#9a3412" },  // yeast - orange
 }
 const DEFAULT_COLOR = { bg: "#f5f5f5", border: "#a3a3a3", text: "#525252" }
+const EMPTY_CLUSTERS: SpeciesCluster[] = []
 
 function getSpeciesColor(taxon: string | null) {
   if (!taxon) return DEFAULT_COLOR
@@ -120,7 +121,7 @@ export function MegaGraphView() {
     queryFn: () => fetchConnectedModels(),
   })
 
-  const clusters = connected?.species_clusters ?? []
+  const clusters = connected?.species_clusters ?? EMPTY_CLUSTERS
   const visibleClusters = selectedCluster
     ? clusters.filter((c) => (c.taxon ?? "unknown") === selectedCluster)
     : clusters

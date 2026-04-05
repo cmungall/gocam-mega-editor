@@ -87,12 +87,16 @@ Update an activity's associations and evidence.
   "biological_process_term": "GO:0008150",
   "occurs_in_term": "GO:0005737",
   "evidence": [
-    {"term": "ECO:0000314", "reference": "PMID:12345678"}
+    {
+      "term": "ECO:0000314",
+      "reference": "PMID:12345678",
+      "with_objects": ["UniProtKB:Q99999"]
+    }
   ]
 }
 ```
 
-All fields are optional — only provided fields are updated.
+All fields are optional. `evidence` can be sent on its own, and the backend applies it across the editable activity assertions that are present on the activity.
 
 ### `POST /model/{model_id}/causal-edge`
 
@@ -114,6 +118,7 @@ Remove a causal association.
 |-----------|------|-------------|
 | `source_activity_id` | string | Source activity ID |
 | `target_activity_id` | string | Target activity ID |
+| `predicate` | string (optional) | Remove only the matching predicate when multiple edges connect the same activities |
 
 !!! note "Persistence"
     All write operations currently persist to the in-memory model cache. Changes are lost when the server restarts. A future iteration will add Minerva write-back for permanent persistence.
