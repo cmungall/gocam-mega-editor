@@ -1,15 +1,24 @@
 """FastAPI application for the GO-CAM Mega Editor backend."""
 
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel as PydanticBaseModel
 
-from gocam_mega_editor.adapters import InMemoryAdapter, MinervaAdapter
+from gocam_mega_editor.adapters import InMemoryAdapter, MinervaAdapter, OverlayAdapter
 from gocam_mega_editor.lookup import OntologyLookup
-from gocam_mega_editor.models import ActivityUpdate, CausalEdgeCreate, ConnectedModels, MegaGraph, ModelConnections, ModelSummary
+from gocam_mega_editor.models import (
+    ActivityUpdate,
+    CausalEdgeCreate,
+    ChangeRecord,
+    ConnectedModels,
+    MegaGraph,
+    ModelConnections,
+    ModelSummary,
+)
 from gocam_mega_editor.service import GoCamService
 
 # Common RO relation labels for causal predicates used in GO-CAM
@@ -47,22 +56,49 @@ def _make_adapter():
     """Build adapter from GOCAM_ADAPTER env var.
 
     Values:
+        auto — prefer local file corpus with local overlay, fall back to Minerva
         minerva (default) — read from GO API, write to in-memory cache
         memory — pure in-memory (no external calls)
         file:/path/to/dir — in-memory + JSON file persistence
         minerva:https://custom-endpoint/ — custom Minerva endpoint
     """
     spec = os.environ.get("GOCAM_ADAPTER", "minerva")
+    local_state_dir = os.environ.get("GOCAM_LOCAL_STATE_DIR")
+    model_storage_dir = Path(local_state_dir) / "models" if local_state_dir else None
+
+    def build_file_adapter(storage_dir: Path) -> InMemoryAdapter | OverlayAdapter:
+        base = InMemoryAdapter(storage_dir=storage_dir)
+        if model_storage_dir is None:
+            return base
+        if model_storage_dir.resolve() == storage_dir.resolve():
+            return base
+        return OverlayAdapter(base=base, overlay=InMemoryAdapter(storage_dir=model_storage_dir))
+
+    if spec == "auto":
+        default_data_dir = Path("data/models")
+        if default_data_dir.exists():
+            return build_file_adapter(default_data_dir)
+        return MinervaAdapter(storage_dir=model_storage_dir)
     if spec == "memory":
         return InMemoryAdapter()
     if spec.startswith("file:"):
-        return InMemoryAdapter(storage_dir=spec.removeprefix("file:"))
+        return build_file_adapter(Path(spec.removeprefix("file:")))
     if spec.startswith("minerva:"):
-        return MinervaAdapter(endpoint_base=spec.removeprefix("minerva:"))
-    return MinervaAdapter()
+        return MinervaAdapter(
+            endpoint_base=spec.removeprefix("minerva:"),
+            storage_dir=model_storage_dir,
+        )
+    return MinervaAdapter(storage_dir=model_storage_dir)
 
 
-service = GoCamService(adapter=_make_adapter())
+def _make_change_log_dir() -> Path | None:
+    local_state_dir = os.environ.get("GOCAM_LOCAL_STATE_DIR")
+    if not local_state_dir:
+        return None
+    return Path(local_state_dir) / "changes"
+
+
+service = GoCamService(adapter=_make_adapter(), change_log_dir=_make_change_log_dir())
 lookup = OntologyLookup()
 
 
@@ -109,7 +145,10 @@ def get_model(model_id: str) -> dict:
     enriched with predicate labels in the objects list.
     """
     model = service.get_model(model_id)
+    summary = service.get_model_summary(model_id)
     data = model.model_dump(exclude_none=True)
+    if summary is not None:
+        data["summary"] = summary.model_dump(exclude_none=True)
 
     # Inject predicate labels into objects so the frontend can resolve them
     existing_ids = {obj["id"] for obj in data.get("objects", [])}
@@ -125,6 +164,48 @@ def get_model(model_id: str) -> dict:
 def model_connections(model_id: str) -> ModelConnections:
     """Find gene products in this model that also appear in other same-species models."""
     return service.get_model_connections(model_id)
+
+
+@app.get("/model/{model_id}/changes", response_model=list[ChangeRecord])
+def model_changes(model_id: str) -> list[ChangeRecord]:
+    """Return semantic changes recorded for a model."""
+    try:
+        return service.get_model_changes(model_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/model/{model_id}/changes/{change_id}/revert", response_model=ChangeRecord)
+def revert_model_change(model_id: str, change_id: str) -> ChangeRecord:
+    """Apply the inverse of a previously recorded change."""
+    try:
+        return service.revert_change(model_id, change_id)
+    except ValueError as e:
+        message = str(e)
+        status_code = 404 if "not found" in message.lower() else 400
+        raise HTTPException(status_code=status_code, detail=message)
+
+
+@app.post("/model/{model_id}/changes/undo", response_model=ChangeRecord)
+def undo_last_model_change(model_id: str) -> ChangeRecord:
+    """Undo the most recent applied change for a model."""
+    try:
+        return service.undo_last_change(model_id)
+    except ValueError as e:
+        message = str(e)
+        status_code = 404 if "not found" in message.lower() else 400
+        raise HTTPException(status_code=status_code, detail=message)
+
+
+@app.post("/model/{model_id}/changes/redo", response_model=ChangeRecord)
+def redo_last_model_change(model_id: str) -> ChangeRecord:
+    """Redo the most recent redoable change for a model."""
+    try:
+        return service.redo_last_change(model_id)
+    except ValueError as e:
+        message = str(e)
+        status_code = 404 if "not found" in message.lower() else 400
+        raise HTTPException(status_code=status_code, detail=message)
 
 
 @app.get("/connected-models", response_model=ConnectedModels)

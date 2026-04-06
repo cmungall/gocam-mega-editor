@@ -1,5 +1,7 @@
 """Pydantic response models for the API."""
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -52,6 +54,7 @@ class EvidenceInput(BaseModel):
     """Evidence for an assertion."""
 
     term: str | None = None
+    term_label: str | None = None
     reference: str | None = None
     with_objects: list[str] | None = None
 
@@ -60,10 +63,32 @@ class ActivityUpdate(BaseModel):
     """Partial update to an activity's associations."""
 
     enabled_by_term: str | None = None
+    enabled_by_label: str | None = None
     molecular_function_term: str | None = None
+    molecular_function_label: str | None = None
     biological_process_term: str | None = None
+    biological_process_label: str | None = None
     occurs_in_term: str | None = None
+    occurs_in_label: str | None = None
     evidence: list[EvidenceInput] | None = None
+
+
+class ChangeRecord(BaseModel):
+    """A semantic change applied to a GO-CAM model."""
+
+    id: str
+    model_id: str
+    created_at: str
+    author_type: str = "human"
+    author_id: str | None = "local-user"
+    status: str = "applied"
+    operation_type: str
+    target: dict[str, Any]
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+    inverse: dict[str, Any] | None = None
+    summary: str
+    metadata: dict[str, Any] | None = None
 
 
 class GeneConnection(BaseModel):

@@ -47,8 +47,11 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
 
   const items = results ?? EMPTY_ITEMS
   const activeIndex = Math.min(selectedIndex, Math.max(items.length - 1, 0))
+  const resolvedValueLabel = valueLabel && valueLabel !== value ? valueLabel : ""
   const selectedLabel =
-    valueLabel || (optimisticSelection.id === value ? optimisticSelection.label : "")
+    resolvedValueLabel ||
+    (optimisticSelection.id === value ? optimisticSelection.label : "")
+  const showIdentifier = Boolean(selectedLabel && selectedLabel !== value)
 
   // Close on outside click
   useEffect(() => {
@@ -123,7 +126,7 @@ export function TermAutocomplete({ field, value, valueLabel, taxon, placeholder,
           <p className="text-[11px] font-medium truncate">
             {selectedLabel || value}
           </p>
-          {selectedLabel && (
+          {showIdentifier && (
             <p className="text-[9px] text-muted-foreground font-mono truncate">
               {value}
             </p>

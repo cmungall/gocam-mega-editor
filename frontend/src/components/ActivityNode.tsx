@@ -4,6 +4,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react"
 export interface ActivityNodeData {
   label: string
   geneProduct: string
+  modelId?: string
   molecularFunction?: string
   biologicalProcess?: string
   cellularComponent?: string
@@ -20,6 +21,7 @@ export interface ActivityNodeData {
 export const ActivityNode = memo(function ActivityNode({
   data,
   selected,
+  isConnectable,
 }: NodeProps) {
   const d = data as unknown as ActivityNodeData
   const expanded = d.isExpanded
@@ -41,7 +43,8 @@ export const ActivityNode = memo(function ActivityNode({
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2.5 !h-2.5 !-left-[6px]"
+        isConnectable={isConnectable}
+        className="!w-3.5 !h-3.5 !-left-[9px] !border-2 !border-background"
         style={{ backgroundColor: d.borderColor }}
       />
 
@@ -98,7 +101,8 @@ export const ActivityNode = memo(function ActivityNode({
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2.5 !h-2.5 !-right-[6px]"
+        isConnectable={isConnectable}
+        className="!w-3.5 !h-3.5 !-right-[9px] !border-2 !border-background"
         style={{ backgroundColor: d.borderColor }}
       />
     </div>

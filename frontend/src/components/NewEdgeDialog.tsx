@@ -60,6 +60,7 @@ export function NewEdgeDialog({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["model", modelId] })
+      queryClient.invalidateQueries({ queryKey: ["changes", modelId] })
       onCreated()
       onClose()
     },
