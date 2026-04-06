@@ -35,6 +35,7 @@ export interface MegaGraph {
 
 export interface EvidenceItem {
   term?: string
+  term_label?: string
   reference?: string
   with_objects?: string[]
   provenances?: { contributor?: string[]; date?: string; provided_by?: string[] }[]
@@ -80,6 +81,23 @@ export interface GoCamModel {
   activities?: Activity[]
   objects?: GoCamObject[]
   provenances?: { contributor?: string[]; date?: string; provided_by?: string[] }[]
+  summary?: ModelSummary
+}
+
+export interface ChangeRecord {
+  id: string
+  model_id: string
+  created_at: string
+  author_type: string
+  author_id?: string | null
+  status: string
+  operation_type: string
+  target: Record<string, unknown>
+  before?: Record<string, unknown> | null
+  after?: Record<string, unknown> | null
+  inverse?: Record<string, unknown> | null
+  summary: string
+  metadata?: Record<string, unknown> | null
 }
 
 const BASE = "/api"
@@ -96,6 +114,22 @@ export function fetchModels(limit = 100, offset = 0): Promise<ModelSummary[]> {
 
 export function fetchModel(id: string): Promise<GoCamModel> {
   return fetchJson(`${BASE}/model/${id}`)
+}
+
+export function fetchModelChanges(id: string): Promise<ChangeRecord[]> {
+  return fetchJson(`${BASE}/model/${id}/changes`)
+}
+
+export function revertModelChange(modelId: string, changeId: string): Promise<ChangeRecord> {
+  return mutateJson(`${BASE}/model/${modelId}/changes/${changeId}/revert`, "POST")
+}
+
+export function undoLastModelChange(modelId: string): Promise<ChangeRecord> {
+  return mutateJson(`${BASE}/model/${modelId}/changes/undo`, "POST")
+}
+
+export function redoLastModelChange(modelId: string): Promise<ChangeRecord> {
+  return mutateJson(`${BASE}/model/${modelId}/changes/redo`, "POST")
 }
 
 export function fetchGraph(modelIds: string[]): Promise<MegaGraph> {
@@ -179,10 +213,14 @@ export function fetchPredicates(): Promise<Record<string, string>> {
 
 export interface ActivityUpdatePayload {
   enabled_by_term?: string
+  enabled_by_label?: string
   molecular_function_term?: string
+  molecular_function_label?: string
   biological_process_term?: string
+  biological_process_label?: string
   occurs_in_term?: string
-  evidence?: { term?: string; reference?: string; with_objects?: string[] }[]
+  occurs_in_label?: string
+  evidence?: { term?: string; term_label?: string; reference?: string; with_objects?: string[] }[]
 }
 
 export interface CausalEdgePayload {
@@ -220,10 +258,14 @@ export function deleteCausalEdge(
   modelId: string,
   sourceActivityId: string,
   targetActivityId: string,
+  predicate?: string,
 ): Promise<void> {
   const params = new URLSearchParams({
     source_activity_id: sourceActivityId,
     target_activity_id: targetActivityId,
   })
+  if (predicate) {
+    params.set("predicate", predicate)
+  }
   return mutateJson(`${BASE}/model/${modelId}/causal-edge?${params}`, "DELETE")
 }

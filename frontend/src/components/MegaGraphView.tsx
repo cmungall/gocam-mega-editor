@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import {
@@ -36,6 +36,9 @@ const SPECIES_COLORS: Record<string, { bg: string; border: string; text: string 
   "NCBITaxon:559292": { bg: "#ffedd5", border: "#f97316", text: "#9a3412" },  // yeast - orange
 }
 const DEFAULT_COLOR = { bg: "#f5f5f5", border: "#a3a3a3", text: "#525252" }
+const EMPTY_CLUSTERS: SpeciesCluster[] = []
+const MAX_CANVAS_MODELS = 250
+const MAX_CANVAS_EDGES = 1500
 
 function getSpeciesColor(taxon: string | null) {
   if (!taxon) return DEFAULT_COLOR
@@ -120,10 +123,20 @@ export function MegaGraphView() {
     queryFn: () => fetchConnectedModels(),
   })
 
-  const clusters = connected?.species_clusters ?? []
+  const clusters = connected?.species_clusters ?? EMPTY_CLUSTERS
   const visibleClusters = selectedCluster
     ? clusters.filter((c) => (c.taxon ?? "unknown") === selectedCluster)
     : clusters
+  const visibleModelCount = useMemo(
+    () => visibleClusters.reduce((sum, cluster) => sum + cluster.models.length, 0),
+    [visibleClusters]
+  )
+  const visibleEdgeCount = useMemo(
+    () => visibleClusters.reduce((sum, cluster) => sum + cluster.edges.length, 0),
+    [visibleClusters]
+  )
+  const tooLargeForCanvas = visibleModelCount > MAX_CANVAS_MODELS || visibleEdgeCount > MAX_CANVAS_EDGES
+  const selectedClusterLabel = visibleClusters[0]?.taxon_label ?? visibleClusters[0]?.taxon ?? "selected scope"
 
   // Stable key for when data actually changes
   const dataKey = connected ? `${connected.total_models}-${connected.total_connections}-${selectedCluster ?? "all"}` : ""
@@ -132,7 +145,11 @@ export function MegaGraphView() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   useEffect(() => {
-    if (!connected) return
+    if (!connected || tooLargeForCanvas) {
+      setNodes([])
+      setEdges([])
+      return
+    }
     const allNodes: Node[] = []
     let xOffset = 0
     for (const cluster of visibleClusters) {
@@ -142,7 +159,7 @@ export function MegaGraphView() {
     setNodes(allNodes)
     setEdges(visibleClusters.flatMap(buildModelEdges))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataKey])
+  }, [dataKey, tooLargeForCanvas])
 
   const onNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => { navigate(`/model/${node.id}`) },
@@ -224,6 +241,38 @@ export function MegaGraphView() {
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               <span className="ml-2 text-muted-foreground text-sm">Discovering model connections...</span>
+            </div>
+          ) : tooLargeForCanvas ? (
+            <div className="flex h-full items-center justify-center p-8">
+              <div className="max-w-xl rounded-xl border bg-card p-6 shadow-sm">
+                <p className="text-sm font-semibold">Network too large to render directly</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {selectedCluster
+                    ? `${selectedClusterLabel} includes ${visibleModelCount} models and ${visibleEdgeCount} connections.`
+                    : `All species together include ${visibleModelCount} models and ${visibleEdgeCount} connections.`}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  The current canvas is meant for smaller exploratory subsets. Use the species filter to narrow the scope, or open a model from the species list on the right.
+                </p>
+                {!selectedCluster && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {clusters.map((cluster) => {
+                      const key = cluster.taxon ?? "unknown"
+                      return (
+                        <Button
+                          key={key}
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[11px] px-2.5"
+                          onClick={() => setSelectedCluster(key)}
+                        >
+                          {cluster.taxon_label ?? cluster.taxon ?? "Unknown"} ({cluster.models.length})
+                        </Button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <ReactFlow

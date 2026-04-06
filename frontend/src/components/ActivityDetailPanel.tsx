@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { X, ExternalLink } from "lucide-react"
+import { X, ExternalLink, Pencil } from "lucide-react"
 import type { Activity, Association, EvidenceItem, GoCamModel, GeneConnection } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,11 @@ interface Props {
   activity: Activity
   model: GoCamModel
   geneConnection?: GeneConnection
+  workspaceModelIds?: string[]
+  focusedModelId?: string
+  onImportModel?: (modelId: string) => void
+  onFocusModel?: (modelId: string) => void
+  onEdit: () => void
   onClose: () => void
 }
 
@@ -69,18 +74,35 @@ function AssociationSection({
   )
 }
 
-export function ActivityDetailPanel({ activity, model, onClose, geneConnection }: Props) {
+export function ActivityDetailPanel({
+  activity,
+  model,
+  onClose,
+  onEdit,
+  geneConnection,
+  workspaceModelIds = [],
+  focusedModelId,
+  onImportModel,
+  onFocusModel,
+}: Props) {
   const causal = activity.causal_associations ?? []
   const inputs = [...(activity.has_input ?? []), ...(activity.has_primary_input ?? [])]
   const outputs = [...(activity.has_output ?? []), ...(activity.has_primary_output ?? [])]
+  const currentModelId = model.id.replace(/^gomodel:/, "")
 
   return (
     <div className="w-80 border-l bg-card flex flex-col h-full">
       <div className="p-3 border-b flex items-center justify-between">
         <h3 className="font-semibold text-sm">Activity Details</h3>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={onEdit}>
+            <Pencil className="h-3 w-3 mr-1" />
+            Edit
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <ScrollArea className="flex-1 p-3">
         <div className="space-y-4 text-sm">
@@ -155,13 +177,38 @@ export function ActivityDetailPanel({ activity, model, onClose, geneConnection }
                 <ul className="space-y-1.5">
                   {geneConnection.other_models.map((m) => (
                     <li key={m.id}>
-                      <Link
-                        to={`/model/${m.id}`}
-                        className="flex items-center gap-1.5 text-xs hover:underline text-primary"
-                      >
-                        <ExternalLink className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{m.title}</span>
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          to={`/model/${m.id}`}
+                          className="flex min-w-0 flex-1 items-center gap-1.5 text-xs hover:underline text-primary"
+                        >
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{m.title}</span>
+                        </Link>
+                        {m.id === currentModelId ? (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Current
+                          </Badge>
+                        ) : workspaceModelIds.includes(m.id) ? (
+                          <Button
+                            variant={focusedModelId === m.id ? "secondary" : "outline"}
+                            size="sm"
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => onFocusModel?.(m.id)}
+                          >
+                            {focusedModelId === m.id ? "Focused" : "Focus"}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => onImportModel?.(m.id)}
+                          >
+                            Import
+                          </Button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>

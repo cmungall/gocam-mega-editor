@@ -60,6 +60,7 @@ export function NewEdgeDialog({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["model", modelId] })
+      queryClient.invalidateQueries({ queryKey: ["changes", modelId] })
       onCreated()
       onClose()
     },
@@ -93,7 +94,7 @@ export function NewEdgeDialog({
 
           <div>
             <label className="text-xs font-medium mb-1 block">Relationship Type</label>
-            <Select value={predicate} onValueChange={setPredicate}>
+            <Select value={predicate} onValueChange={(value) => setPredicate(value ?? "")}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder="Select a causal predicate..." />
               </SelectTrigger>

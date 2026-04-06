@@ -89,6 +89,19 @@ def test_get_model(client):
     assert data["title"] == "Test pathway"
     assert data["taxon"] == "NCBITaxon:9606"
     assert len(data["activities"]) == 2
+    assert data["summary"]["groups"] == ["WB"]
+    assert data["summary"]["contributors"] == ["Alice Curator", "Bob Reviewer"]
+
+
+def test_get_model_changes_empty(client):
+    fake_model = _make_fake_model()
+    with patch(
+        "gocam_mega_editor.service.GoCamService.get_model",
+        return_value=fake_model,
+    ):
+        resp = client.get("/model/568b0f9600000284/changes")
+    assert resp.status_code == 200
+    assert resp.json() == []
 
 
 def test_get_graph(client):
@@ -162,13 +175,123 @@ def test_update_activity_molecular_function(client):
             "/model/568b0f9600000284/activity/activity_2",
             json={
                 "molecular_function_term": "GO:0004674",
-                "evidence": [{"term": "ECO:0000314", "reference": "PMID:12345678"}],
+                "molecular_function_label": "protein serine/threonine kinase activity",
+                "evidence": [
+                    {
+                        "term": "ECO:0000314",
+                        "term_label": "direct assay evidence",
+                        "reference": "PMID:12345678",
+                    }
+                ],
             },
         )
     assert resp.status_code == 200
     data = resp.json()
     assert data["molecular_function"]["term"] == "GO:0004674"
     assert data["molecular_function"]["evidence"][0]["reference"] == "PMID:12345678"
+    assert any(
+        obj.id == "GO:0004674" and obj.label == "protein serine/threonine kinase activity"
+        for obj in fake.objects
+    )
+
+
+def test_update_activity_evidence_only(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.patch(
+            "/model/568b0f9600000284/activity/activity_1",
+            json={
+                "evidence": [
+                    {
+                        "term": "ECO:0000314",
+                        "term_label": "direct assay evidence",
+                        "reference": "PMID:12345678",
+                        "with_objects": ["UniProtKB:Q99999"],
+                    }
+                ]
+            },
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["enabled_by"]["evidence"][0]["reference"] == "PMID:12345678"
+    assert data["enabled_by"]["evidence"][0]["with_objects"] == ["UniProtKB:Q99999"]
+    assert data["molecular_function"]["evidence"][0]["term"] == "ECO:0000314"
+
+
+def test_update_activity_clear_gene_product(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.patch(
+            "/model/568b0f9600000284/activity/activity_1",
+            json={"enabled_by_term": ""},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "enabled_by" not in data
+
+
+def test_model_changes_record_activity_update(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.patch(
+            "/model/568b0f9600000284/activity/activity_2",
+            json={
+                "molecular_function_term": "GO:0004674",
+                "molecular_function_label": "protein serine/threonine kinase activity",
+                "evidence": [
+                    {
+                        "term": "ECO:0000314",
+                        "term_label": "direct assay evidence",
+                        "reference": "PMID:12345678",
+                    }
+                ],
+            },
+        )
+        assert resp.status_code == 200
+
+        changes_resp = client.get("/model/568b0f9600000284/changes")
+    assert changes_resp.status_code == 200
+    changes = changes_resp.json()
+    assert len(changes) == 2
+    assert changes[0]["operation_type"] == "set_molecular_function"
+    assert changes[0]["before"]["term"] == "GO:0003674"
+    assert changes[0]["before"]["label"] == "molecular_function"
+    assert changes[0]["after"]["term"] == "GO:0004674"
+    assert changes[0]["after"]["label"] == "protein serine/threonine kinase activity"
+    assert changes[1]["operation_type"] == "replace_evidence"
+    assert changes[1]["after"]["evidence"][0]["term_label"] == "direct assay evidence"
+    assert changes[1]["after"]["evidence"][0]["reference"] == "PMID:12345678"
+
+
+def test_revert_model_change_endpoint(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        update_resp = client.patch(
+            "/model/568b0f9600000284/activity/activity_1",
+            json={
+                "enabled_by_term": "UniProtKB:Q99999",
+                "enabled_by_label": "GeneC",
+            },
+        )
+        assert update_resp.status_code == 200
+
+        changes_resp = client.get("/model/568b0f9600000284/changes")
+        assert changes_resp.status_code == 200
+        change_id = changes_resp.json()[0]["id"]
+
+        revert_resp = client.post(f"/model/568b0f9600000284/changes/{change_id}/revert")
+        assert revert_resp.status_code == 200
+
+        reverted_model_resp = client.get("/model/568b0f9600000284")
+        final_changes_resp = client.get("/model/568b0f9600000284/changes")
+    assert reverted_model_resp.status_code == 200
+    assert reverted_model_resp.json()["activities"][0]["enabled_by"]["term"] == "UniProtKB:P12345"
+    assert final_changes_resp.status_code == 200
+    changes = final_changes_resp.json()
+    assert len(changes) == 2
+    assert changes[0]["status"] == "reverted"
+    assert changes[0]["metadata"]["reverted_by_change_id"] == changes[1]["id"]
+    assert changes[1]["metadata"]["reverts_change_id"] == changes[0]["id"]
 
 
 def test_update_activity_not_found(client):
@@ -202,6 +325,116 @@ def test_create_causal_edge(client):
     assert len(fake.activities[1].causal_associations) == 1
 
 
+def test_model_changes_record_edge_create_and_delete(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        create_resp = client.post(
+            "/model/568b0f9600000284/causal-edge",
+            json={
+                "source_activity_id": "activity_2",
+                "target_activity_id": "activity_1",
+                "predicate": "RO:0002630",
+            },
+        )
+        assert create_resp.status_code == 200
+
+        delete_resp = client.request(
+            "DELETE",
+            "/model/568b0f9600000284/causal-edge",
+            params={
+                "source_activity_id": "activity_2",
+                "target_activity_id": "activity_1",
+                "predicate": "RO:0002630",
+            },
+        )
+        assert delete_resp.status_code == 200
+
+        changes_resp = client.get("/model/568b0f9600000284/changes")
+    assert changes_resp.status_code == 200
+    changes = changes_resp.json()
+    assert [change["operation_type"] for change in changes] == [
+        "add_causal_edge",
+        "delete_causal_edge",
+    ]
+    assert changes[0]["target"]["predicate"] == "RO:0002630"
+    assert changes[1]["before"]["predicate"] == "RO:0002630"
+
+
+def test_undo_last_model_change_endpoint(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        create_resp = client.post(
+            "/model/568b0f9600000284/causal-edge",
+            json={
+                "source_activity_id": "activity_2",
+                "target_activity_id": "activity_1",
+                "predicate": "RO:0002630",
+            },
+        )
+        assert create_resp.status_code == 200
+        assert len(fake.activities[1].causal_associations) == 1
+
+        undo_resp = client.post("/model/568b0f9600000284/changes/undo")
+        assert undo_resp.status_code == 200
+
+        changes_resp = client.get("/model/568b0f9600000284/changes")
+    assert changes_resp.status_code == 200
+    changes = changes_resp.json()
+    assert len(changes) == 2
+    assert changes[0]["status"] == "reverted"
+    assert changes[1]["operation_type"] == "delete_causal_edge"
+    assert fake.activities[1].causal_associations == []
+
+
+def test_undo_and_redo_follow_stack_order(client):
+    fake = _make_fake_model()
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        change_a = client.patch(
+            "/model/568b0f9600000284/activity/activity_1",
+            json={
+                "enabled_by_term": "UniProtKB:Q11111",
+                "enabled_by_label": "GeneX",
+            },
+        )
+        assert change_a.status_code == 200
+
+        change_b = client.patch(
+            "/model/568b0f9600000284/activity/activity_2",
+            json={
+                "molecular_function_term": "GO:0004674",
+                "molecular_function_label": "protein serine/threonine kinase activity",
+            },
+        )
+        assert change_b.status_code == 200
+
+        undo_b = client.post("/model/568b0f9600000284/changes/undo")
+        assert undo_b.status_code == 200
+        assert fake.activities[1].molecular_function.term == "GO:0003674"
+        assert fake.activities[0].enabled_by.term == "UniProtKB:Q11111"
+
+        undo_a = client.post("/model/568b0f9600000284/changes/undo")
+        assert undo_a.status_code == 200
+        assert fake.activities[0].enabled_by.term == "UniProtKB:P12345"
+        assert fake.activities[1].molecular_function.term == "GO:0003674"
+
+        redo_a = client.post("/model/568b0f9600000284/changes/redo")
+        assert redo_a.status_code == 200
+        assert fake.activities[0].enabled_by.term == "UniProtKB:Q11111"
+        assert fake.activities[1].molecular_function.term == "GO:0003674"
+
+        redo_b = client.post("/model/568b0f9600000284/changes/redo")
+        assert redo_b.status_code == 200
+        assert fake.activities[0].enabled_by.term == "UniProtKB:Q11111"
+        assert fake.activities[1].molecular_function.term == "GO:0004674"
+
+        changes_resp = client.get("/model/568b0f9600000284/changes")
+    assert changes_resp.status_code == 200
+    changes = changes_resp.json()
+    root_changes = [change for change in changes if not change.get("metadata", {}).get("generated_by")]
+    assert len(root_changes) == 2
+    assert all(change["status"] == "applied" for change in root_changes)
+
+
 def test_create_causal_edge_target_not_found(client):
     fake = _make_fake_model()
     with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
@@ -231,6 +464,30 @@ def test_delete_causal_edge(client):
         )
     assert resp.status_code == 200
     assert len(fake.activities[0].causal_associations) == 0
+
+
+def test_delete_causal_edge_by_predicate(client):
+    fake = _make_fake_model()
+    fake.activities[0].causal_associations.append(
+        CausalAssociation(
+            predicate="RO:0002630",
+            downstream_activity="activity_2",
+        )
+    )
+    with patch("gocam_mega_editor.service.GoCamService.get_model", return_value=fake):
+        resp = client.request(
+            "DELETE",
+            "/model/568b0f9600000284/causal-edge",
+            params={
+                "source_activity_id": "activity_1",
+                "target_activity_id": "activity_2",
+                "predicate": "RO:0002411",
+            },
+        )
+    assert resp.status_code == 200
+    remaining = fake.activities[0].causal_associations
+    assert len(remaining) == 1
+    assert remaining[0].predicate == "RO:0002630"
 
 
 def test_list_predicates(client):

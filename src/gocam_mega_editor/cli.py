@@ -17,11 +17,12 @@ def serve(
     reload: bool = True,
     adapter: Annotated[
         str,
-        typer.Option(help="Storage adapter: minerva, memory, file:/path, minerva:url"),
-    ] = "minerva",
+        typer.Option(help="Storage adapter: auto, minerva, memory, file:/path, minerva:url"),
+    ] = "auto",
 ) -> None:
     """Start the development server."""
     os.environ["GOCAM_ADAPTER"] = adapter
+    os.environ.setdefault("GOCAM_LOCAL_STATE_DIR", ".gocam-state")
     uvicorn.run("gocam_mega_editor.app:app", host=host, port=port, reload=reload)
 
 

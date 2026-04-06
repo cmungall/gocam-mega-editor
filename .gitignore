@@ -16,6 +16,7 @@ frontend/.tsbuildinfo
 
 # Cached model data
 data/
+.gocam-state/
 
 # IDE
 .idea/
