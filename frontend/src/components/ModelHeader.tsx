@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, ExternalLink, Loader2, Pencil, Redo2, Undo2, X } from "lucide-react"
 
 import { fetchModelChanges, redoLastModelChange, undoLastModelChange, type ChangeRecord, type GoCamModel } from "@/lib/api"
+import type { NeighboringModelSummary } from "@/lib/neighbors"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ModelChangesSheet } from "./ModelChangesSheet"
-import { NeighboringModelsSheet, type NeighboringModelSummary } from "./NeighboringModelsSheet"
+import { NeighboringModelsSheet } from "./NeighboringModelsSheet"
 
 interface Props {
   model: GoCamModel
@@ -20,6 +21,7 @@ interface Props {
   neighboringModels?: NeighboringModelSummary[]
   neighboringModelsLoading?: boolean
   onImportModel?: (modelId: string) => void
+  onSelectConnectorGene?: (geneId: string) => void
   onRemoveImportedModel?: (modelId: string) => void
 }
 
@@ -141,6 +143,7 @@ export function ModelHeader({
   neighboringModels = [],
   neighboringModelsLoading = false,
   onImportModel,
+  onSelectConnectorGene,
   onRemoveImportedModel,
 }: Props) {
   const queryClient = useQueryClient()
@@ -348,6 +351,7 @@ export function ModelHeader({
             </Button>
 
             <NeighboringModelsSheet
+              key={model.id}
               model={model}
               neighboringModels={neighboringModels}
               loading={neighboringModelsLoading}
@@ -355,6 +359,7 @@ export function ModelHeader({
               focusedModelId={focusedModelId}
               onImportModel={onImportModel}
               onFocusModel={onFocusModel}
+              onSelectConnectorGene={onSelectConnectorGene}
             />
 
             <ModelChangesSheet model={model} />

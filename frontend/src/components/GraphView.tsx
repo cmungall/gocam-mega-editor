@@ -30,11 +30,14 @@ import {
   EDGE_COLORS,
   type ProcessColor,
 } from "@/lib/colors"
+import {
+  buildNeighboringModelSummaries,
+  type NeighboringModelSummary,
+} from "@/lib/neighbors"
 import { ActivityNode, type ActivityNodeData } from "./ActivityNode"
 import { ActivityDetailPanel } from "./ActivityDetailPanel"
 import { ActivityEditPanel } from "./ActivityEditPanel"
 import { ModelHeader } from "./ModelHeader"
-import type { NeighboringModelSummary } from "./NeighboringModelsSheet"
 import { NewEdgeDialog } from "./NewEdgeDialog"
 import { ProcessLegend } from "./ProcessLegend"
 
@@ -497,46 +500,7 @@ export function GraphView() {
   }, [activeFocusedModelId, workspaceModelIds])
   const neighboringModels = useMemo<NeighboringModelSummary[]>(() => {
     if (!activeFocusedModelId) return []
-    const connections = workspaceConnections.get(activeFocusedModelId)
-    if (!connections) return []
-
-    const byModel = new Map<
-      string,
-      {
-        id: string
-        title: string
-        activityCount: number
-        sharedGenes: { id: string; label: string | null }[]
-      }
-    >()
-
-    for (const connection of connections.connections) {
-      for (const otherModel of connection.other_models) {
-        const existing = byModel.get(otherModel.id) ?? {
-          id: otherModel.id,
-          title: otherModel.title,
-          activityCount: otherModel.activity_count,
-          sharedGenes: [],
-        }
-        existing.sharedGenes.push({
-          id: connection.gene_id,
-          label: connection.label,
-        })
-        byModel.set(otherModel.id, existing)
-      }
-    }
-
-    return [...byModel.values()]
-      .map((entry) => ({
-        ...entry,
-        sharedGeneCount: entry.sharedGenes.length,
-      }))
-      .sort((left, right) => {
-        if (right.sharedGeneCount !== left.sharedGeneCount) {
-          return right.sharedGeneCount - left.sharedGeneCount
-        }
-        return left.title.localeCompare(right.title)
-      })
+    return buildNeighboringModelSummaries(workspaceConnections.get(activeFocusedModelId))
   }, [activeFocusedModelId, workspaceConnections])
   const focusedConnectionSummary = useMemo(() => {
     if (!activeFocusedModelId) return null
@@ -680,6 +644,24 @@ export function GraphView() {
     [selectedActivityEntry?.modelId]
   )
 
+  const handleSelectConnectorGene = useCallback(
+    (geneId: string) => {
+      if (!activeFocusedModelId) return
+      const focusedEntry = workspaceModels.find((entry) => entry.id === activeFocusedModelId)
+      if (!focusedEntry) return
+
+      const matchingActivity = (focusedEntry.model.activities ?? []).find(
+        (activity) => activity.enabled_by?.term === geneId
+      )
+      if (!matchingActivity) return
+
+      setFocusedModelId(focusedEntry.id)
+      setSelectedActivityId(matchingActivity.id)
+      setExpandedActivityId(matchingActivity.id)
+    },
+    [activeFocusedModelId, workspaceModels]
+  )
+
   const onNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       if (node.type !== "activity") return
@@ -763,6 +745,7 @@ export function GraphView() {
               : false
           }
           onImportModel={handleImportModel}
+          onSelectConnectorGene={handleSelectConnectorGene}
           onRemoveImportedModel={handleRemoveImportedModel}
         />
 

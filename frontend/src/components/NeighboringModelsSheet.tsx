@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { ExternalLink, GitBranch, Loader2, Network, Search } from "lucide-react"
 
 import type { GoCamModel } from "@/lib/api"
+import { filterNeighboringModels, type NeighboringModelSummary } from "@/lib/neighbors"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,14 +16,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 
-export interface NeighboringModelSummary {
-  id: string
-  title: string
-  activityCount: number
-  sharedGeneCount: number
-  sharedGenes: { id: string; label: string | null }[]
-}
-
 interface Props {
   model: GoCamModel
   neighboringModels: NeighboringModelSummary[]
@@ -31,6 +24,7 @@ interface Props {
   focusedModelId?: string
   onImportModel?: (modelId: string) => void
   onFocusModel?: (modelId: string) => void
+  onSelectConnectorGene?: (geneId: string) => void
 }
 
 function formatGeneLabel(gene: { id: string; label: string | null }): string {
@@ -48,23 +42,22 @@ export function NeighboringModelsSheet({
   focusedModelId,
   onImportModel,
   onFocusModel,
+  onSelectConnectorGene,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const currentModelId = model.id.replace(/^gomodel:/, "")
-  const filteredNeighbors = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    if (!normalized) return neighboringModels
+  const filteredNeighbors = useMemo(
+    () => filterNeighboringModels(neighboringModels, query),
+    [neighboringModels, query]
+  )
 
-    return neighboringModels.filter((neighbor) => {
-      if (neighbor.title.toLowerCase().includes(normalized)) return true
-      if (neighbor.id.toLowerCase().includes(normalized)) return true
-      return neighbor.sharedGenes.some((gene) => {
-        const label = gene.label?.toLowerCase() ?? ""
-        return label.includes(normalized) || gene.id.toLowerCase().includes(normalized)
-      })
-    })
-  }, [neighboringModels, query])
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen)
+    if (!nextOpen) {
+      setQuery("")
+    }
+  }
 
   return (
     <>
@@ -82,12 +75,12 @@ export function NeighboringModelsSheet({
         </span>
       </Button>
 
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent side="right" className="w-full sm:max-w-lg">
           <SheetHeader className="border-b">
-            <SheetTitle>Neighboring Models</SheetTitle>
+            <SheetTitle>Neighbors of {model.title}</SheetTitle>
             <SheetDescription>
-              Models connected to this pathway by shared gene products. Import a model to bring it into the current level-2 workspace.
+              Connected to <span className="font-mono">{currentModelId}</span> by shared gene products. Import a model to bring it into the current level-2 workspace, or click a connector gene to jump to it in the graph.
             </SheetDescription>
           </SheetHeader>
 
@@ -193,14 +186,22 @@ export function NeighboringModelsSheet({
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {visibleGenes.map((gene) => (
-                        <Badge
+                        <button
                           key={`${neighbor.id}:${gene.id}`}
-                          variant="outline"
-                          className="max-w-48 truncate text-[10px]"
-                          title={gene.label && gene.label !== gene.id ? `${gene.label} (${gene.id})` : gene.id}
+                          type="button"
+                          className="inline-flex max-w-48 items-center rounded-full border bg-background px-2 py-0.5 text-[10px] transition-colors hover:bg-muted"
+                          title={
+                            gene.label && gene.label !== gene.id
+                              ? `Locate ${gene.label} (${gene.id}) in ${model.title}`
+                              : `Locate ${gene.id} in ${model.title}`
+                          }
+                          onClick={() => {
+                            onSelectConnectorGene?.(gene.id)
+                            setOpen(false)
+                          }}
                         >
                           {formatGeneLabel(gene)}
-                        </Badge>
+                        </button>
                       ))}
                       {hiddenGeneCount > 0 && (
                         <Badge variant="secondary" className="text-[10px]">

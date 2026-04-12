@@ -29,7 +29,7 @@ Toggle edit mode to modify activities. Edit gene product, molecular function, bi
 ![Edit panel](docs/screenshots/05-edit-panel.png)
 
 ### Change History and Neighbor Import
-The editor keeps a structured local change history with undo/redo, and model pages expose neighboring-model import directly from the header so related pathways can be brought into the same workspace.
+The editor keeps a structured local change history with undo/redo, and model pages expose neighboring-model import directly from the header so related pathways can be brought into the same workspace. The `Neighbors` browser is scoped to the currently focused model, can be filtered by model title/ID/shared gene, and shared-gene badges can jump directly to the matching activity in the graph.
 
 ### Multiple Pathway Types
 Works with different pathway topologies — from branching signaling cascades to linear metabolic pathways.
@@ -94,7 +94,7 @@ Works with different pathway topologies — from branching signaling cascades to
   - Add/remove evidence with ECO codes and PMID references
   - Drag between nodes to create causal edges with predicate picker
 - **Structured change history** — local persistent change log with `Undo`, `Redo`, change history, and per-change revert
-- **Neighboring model browser** — import connected models into the same level-2 workspace from the header-level `Neighbors` browser or from node/detail-panel discovery paths
+- **Neighboring model browser** — import connected models into the same level-2 workspace from the header-level `Neighbors` browser or from node/detail-panel discovery paths, and jump from shared-gene badges to connector activities in the focused model
 - **Searchable model list** — filter by title, ID, contributor, or group
 - **MiniMap** with process-colored nodes for overview navigation
 
@@ -139,6 +139,7 @@ Backend notes:
 ```bash
 uv run pytest
 cd frontend && npm run lint
+cd frontend && npm run test
 cd frontend && npm run build
 ```
 
@@ -148,9 +149,14 @@ cd frontend && npm run build
 |----------|--------|-------------|
 | `/models` | GET | List models (query: `limit`, `offset`) |
 | `/model/{id}` | GET | Full model as JSON |
+| `/model/{id}/connections` | GET | Shared-gene neighboring models for one model |
+| `/model/{id}/changes` | GET | Structured change history for one model |
 | `/model/{id}/activity/{activity_id}` | PATCH | Update activity associations and evidence |
 | `/model/{id}/causal-edge` | POST | Create causal association between activities |
 | `/model/{id}/causal-edge` | DELETE | Remove causal association (query: `source_activity_id`, `target_activity_id`) |
+| `/model/{id}/changes/undo` | POST | Undo the latest applied model change |
+| `/model/{id}/changes/redo` | POST | Redo the latest undone model change |
+| `/model/{id}/changes/{change_id}/revert` | POST | Revert a specific applied model change |
 | `/graph` | GET | Mega-graph (query: `model_id`, repeatable) |
 | `/predicates` | GET | List available causal predicates with labels |
 | `/health` | GET | Health check |
