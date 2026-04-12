@@ -34,6 +34,7 @@ import { ActivityNode, type ActivityNodeData } from "./ActivityNode"
 import { ActivityDetailPanel } from "./ActivityDetailPanel"
 import { ActivityEditPanel } from "./ActivityEditPanel"
 import { ModelHeader } from "./ModelHeader"
+import type { NeighboringModelSummary } from "./NeighboringModelsSheet"
 import { NewEdgeDialog } from "./NewEdgeDialog"
 import { ProcessLegend } from "./ProcessLegend"
 
@@ -490,6 +491,53 @@ export function GraphView() {
       ),
     [workspaceConnections, workspaceModelIds]
   )
+  const focusedConnectionIndex = useMemo(() => {
+    if (!activeFocusedModelId) return -1
+    return workspaceModelIds.findIndex((workspaceId) => workspaceId === activeFocusedModelId)
+  }, [activeFocusedModelId, workspaceModelIds])
+  const neighboringModels = useMemo<NeighboringModelSummary[]>(() => {
+    if (!activeFocusedModelId) return []
+    const connections = workspaceConnections.get(activeFocusedModelId)
+    if (!connections) return []
+
+    const byModel = new Map<
+      string,
+      {
+        id: string
+        title: string
+        activityCount: number
+        sharedGenes: { id: string; label: string | null }[]
+      }
+    >()
+
+    for (const connection of connections.connections) {
+      for (const otherModel of connection.other_models) {
+        const existing = byModel.get(otherModel.id) ?? {
+          id: otherModel.id,
+          title: otherModel.title,
+          activityCount: otherModel.activity_count,
+          sharedGenes: [],
+        }
+        existing.sharedGenes.push({
+          id: connection.gene_id,
+          label: connection.label,
+        })
+        byModel.set(otherModel.id, existing)
+      }
+    }
+
+    return [...byModel.values()]
+      .map((entry) => ({
+        ...entry,
+        sharedGeneCount: entry.sharedGenes.length,
+      }))
+      .sort((left, right) => {
+        if (right.sharedGeneCount !== left.sharedGeneCount) {
+          return right.sharedGeneCount - left.sharedGeneCount
+        }
+        return left.title.localeCompare(right.title)
+      })
+  }, [activeFocusedModelId, workspaceConnections])
   const focusedConnectionSummary = useMemo(() => {
     if (!activeFocusedModelId) return null
     const connections = workspaceConnections.get(activeFocusedModelId)
@@ -708,6 +756,13 @@ export function GraphView() {
           anchorModelId={modelId}
           focusedModelId={activeFocusedModelId ?? modelId}
           onFocusModel={handleFocusModel}
+          neighboringModels={neighboringModels}
+          neighboringModelsLoading={
+            focusedConnectionIndex >= 0
+              ? Boolean(workspaceConnectionQueries[focusedConnectionIndex]?.isLoading)
+              : false
+          }
+          onImportModel={handleImportModel}
           onRemoveImportedModel={handleRemoveImportedModel}
         />
 
@@ -745,7 +800,7 @@ export function GraphView() {
                 {focusedConnectionSummary.geneCount} shared-gene connector{focusedConnectionSummary.geneCount === 1 ? "" : "s"} across {focusedConnectionSummary.modelCount} neighboring model{focusedConnectionSummary.modelCount === 1 ? "" : "s"}
               </p>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Click a node with an amber corner badge to inspect neighboring models and import them into this workspace.
+                Use the `Neighbors` button in the header, or click a node with an amber corner badge to inspect connected models and import them into this workspace.
               </p>
             </div>
           )}

@@ -7,6 +7,7 @@ import { fetchModelChanges, redoLastModelChange, undoLastModelChange, type Chang
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ModelChangesSheet } from "./ModelChangesSheet"
+import { NeighboringModelsSheet, type NeighboringModelSummary } from "./NeighboringModelsSheet"
 
 interface Props {
   model: GoCamModel
@@ -16,6 +17,9 @@ interface Props {
   anchorModelId?: string
   focusedModelId?: string
   onFocusModel?: (modelId: string) => void
+  neighboringModels?: NeighboringModelSummary[]
+  neighboringModelsLoading?: boolean
+  onImportModel?: (modelId: string) => void
   onRemoveImportedModel?: (modelId: string) => void
 }
 
@@ -134,6 +138,9 @@ export function ModelHeader({
   anchorModelId,
   focusedModelId,
   onFocusModel,
+  neighboringModels = [],
+  neighboringModelsLoading = false,
+  onImportModel,
   onRemoveImportedModel,
 }: Props) {
   const queryClient = useQueryClient()
@@ -339,6 +346,16 @@ export function ModelHeader({
               )}
               Redo
             </Button>
+
+            <NeighboringModelsSheet
+              model={model}
+              neighboringModels={neighboringModels}
+              loading={neighboringModelsLoading}
+              workspaceModelIds={workspaceEntries.map((entry) => entry.id)}
+              focusedModelId={focusedModelId}
+              onImportModel={onImportModel}
+              onFocusModel={onFocusModel}
+            />
 
             <ModelChangesSheet model={model} />
           </div>
