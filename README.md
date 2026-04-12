@@ -28,6 +28,9 @@ Toggle edit mode to modify activities. Edit gene product, molecular function, bi
 
 ![Edit panel](docs/screenshots/05-edit-panel.png)
 
+### Change History and Neighbor Import
+The editor keeps a structured local change history with undo/redo, and model pages expose neighboring-model import directly from the header so related pathways can be brought into the same workspace.
+
 ### Multiple Pathway Types
 Works with different pathway topologies — from branching signaling cascades to linear metabolic pathways.
 
@@ -90,6 +93,8 @@ Works with different pathway topologies — from branching signaling cascades to
   - Modify gene product, molecular function, biological process, cellular component
   - Add/remove evidence with ECO codes and PMID references
   - Drag between nodes to create causal edges with predicate picker
+- **Structured change history** — local persistent change log with `Undo`, `Redo`, change history, and per-change revert
+- **Neighboring model browser** — import connected models into the same level-2 workspace from the header-level `Neighbors` browser or from node/detail-panel discovery paths
 - **Searchable model list** — filter by title, ID, contributor, or group
 - **MiniMap** with process-colored nodes for overview navigation
 
@@ -112,23 +117,29 @@ just dev
 Or manually:
 
 ```bash
-# Terminal 1: Backend (port 8000)
+# Terminal 1: Backend (port 8484)
 uv sync
-uv run gocam-mega-editor serve
+uv run gocam-mega-editor serve --no-reload
 
 # Terminal 2: Frontend (port 5173, proxies /api to backend)
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1
 ```
 
-Open http://localhost:5173
+Open http://127.0.0.1:5173
+
+Backend notes:
+- the backend listens on `127.0.0.1:8484`
+- the default adapter is `auto`, which prefers the local `data/models` corpus
+- local edits persist under `.gocam-state/`
 
 ### Run Tests
 
 ```bash
-just test          # backend pytest (15 tests)
-cd frontend && npx tsc --noEmit  # frontend type check
+uv run pytest
+cd frontend && npm run lint
+cd frontend && npm run build
 ```
 
 ## API Endpoints
@@ -177,7 +188,9 @@ gocam-mega-editor/
 
 ## Data Source
 
-Models are fetched live from the [Gene Ontology API](https://api.geneontology.org). The backend uses the [`gocam`](https://github.com/geneontology/gocam) package which provides:
+In local development, the backend now defaults to the checked-in `data/models` corpus with a local overlay for edits in `.gocam-state/`. It can still fall back to live GO/Minerva-backed reads when configured to do so.
+
+The backend uses the [`gocam`](https://github.com/geneontology/gocam) package which provides:
 
 - LinkML-based Pydantic data models
 - Minerva API wrapper for fetching models

@@ -1,10 +1,11 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { ExternalLink, GitBranch, Loader2, Network } from "lucide-react"
+import { ExternalLink, GitBranch, Loader2, Network, Search } from "lucide-react"
 
 import type { GoCamModel } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
@@ -49,7 +50,21 @@ export function NeighboringModelsSheet({
   onFocusModel,
 }: Props) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
   const currentModelId = model.id.replace(/^gomodel:/, "")
+  const filteredNeighbors = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    if (!normalized) return neighboringModels
+
+    return neighboringModels.filter((neighbor) => {
+      if (neighbor.title.toLowerCase().includes(normalized)) return true
+      if (neighbor.id.toLowerCase().includes(normalized)) return true
+      return neighbor.sharedGenes.some((gene) => {
+        const label = gene.label?.toLowerCase() ?? ""
+        return label.includes(normalized) || gene.id.toLowerCase().includes(normalized)
+      })
+    })
+  }, [neighboringModels, query])
 
   return (
     <>
@@ -78,6 +93,21 @@ export function NeighboringModelsSheet({
 
           <ScrollArea className="flex-1">
             <div className="space-y-3 p-4">
+              <div className="rounded-xl border bg-muted/30 p-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Filter by model title, ID, or shared gene"
+                    className="pl-8"
+                  />
+                </div>
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  {filteredNeighbors.length} of {neighboringModels.length} neighboring model{neighboringModels.length === 1 ? "" : "s"} shown
+                </p>
+              </div>
+
               {loading && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -91,7 +121,13 @@ export function NeighboringModelsSheet({
                 </div>
               )}
 
-              {neighboringModels.map((neighbor) => {
+              {!loading && neighboringModels.length > 0 && filteredNeighbors.length === 0 && (
+                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  No neighboring models match the current filter.
+                </div>
+              )}
+
+              {filteredNeighbors.map((neighbor) => {
                 const imported = workspaceModelIds.includes(neighbor.id)
                 const focused = focusedModelId === neighbor.id
                 const visibleGenes = neighbor.sharedGenes.slice(0, 5)
