@@ -110,7 +110,7 @@ Works with different pathway topologies — from branching signaling cascades to
 ### Run Both Servers
 
 ```bash
-# Install and start everything
+# Start both servers
 just dev
 ```
 
