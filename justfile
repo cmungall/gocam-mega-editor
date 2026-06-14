@@ -2,18 +2,18 @@
 
 # Start the backend API server
 serve-backend:
-    uv run gocam-mega-editor serve
+    uv run gocam-mega-editor serve --no-reload
 
 # Start the frontend dev server (proxies /api to backend)
 serve-frontend:
-    cd frontend && npm run dev
+    cd frontend && npm run dev -- --host 127.0.0.1
 
 # Start both backend and frontend
 dev:
     #!/usr/bin/env bash
-    uv run gocam-mega-editor serve &
+    uv run gocam-mega-editor serve --no-reload &
     BACKEND_PID=$!
-    cd frontend && npm run dev &
+    cd frontend && npm run dev -- --host 127.0.0.1 &
     FRONTEND_PID=$!
     trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT
     wait

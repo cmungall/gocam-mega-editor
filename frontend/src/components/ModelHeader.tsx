@@ -4,9 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, ExternalLink, Loader2, Pencil, Redo2, Undo2, X } from "lucide-react"
 
 import { fetchModelChanges, redoLastModelChange, undoLastModelChange, type ChangeRecord, type GoCamModel } from "@/lib/api"
+import type { NeighboringModelSummary } from "@/lib/neighbors"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ModelChangesSheet } from "./ModelChangesSheet"
+import { NeighboringModelsSheet } from "./NeighboringModelsSheet"
 
 interface Props {
   model: GoCamModel
@@ -16,6 +18,11 @@ interface Props {
   anchorModelId?: string
   focusedModelId?: string
   onFocusModel?: (modelId: string) => void
+  neighboringModels?: NeighboringModelSummary[]
+  neighboringModelsLoading?: boolean
+  neighboringModelsError?: string | null
+  onImportModel?: (modelId: string) => void
+  onSelectConnectorGene?: (geneId: string) => void
   onRemoveImportedModel?: (modelId: string) => void
 }
 
@@ -134,6 +141,11 @@ export function ModelHeader({
   anchorModelId,
   focusedModelId,
   onFocusModel,
+  neighboringModels = [],
+  neighboringModelsLoading = false,
+  neighboringModelsError = null,
+  onImportModel,
+  onSelectConnectorGene,
   onRemoveImportedModel,
 }: Props) {
   const queryClient = useQueryClient()
@@ -339,6 +351,19 @@ export function ModelHeader({
               )}
               Redo
             </Button>
+
+            <NeighboringModelsSheet
+              key={model.id}
+              model={model}
+              neighboringModels={neighboringModels}
+              loading={neighboringModelsLoading}
+              errorMessage={neighboringModelsError}
+              workspaceModelIds={workspaceEntries.map((entry) => entry.id)}
+              focusedModelId={focusedModelId}
+              onImportModel={onImportModel}
+              onFocusModel={onFocusModel}
+              onSelectConnectorGene={onSelectConnectorGene}
+            />
 
             <ModelChangesSheet model={model} />
           </div>

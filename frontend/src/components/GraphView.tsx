@@ -30,6 +30,10 @@ import {
   EDGE_COLORS,
   type ProcessColor,
 } from "@/lib/colors"
+import {
+  buildNeighboringModelSummaries,
+  type NeighboringModelSummary,
+} from "@/lib/neighbors"
 import { ActivityNode, type ActivityNodeData } from "./ActivityNode"
 import { ActivityDetailPanel } from "./ActivityDetailPanel"
 import { ActivityEditPanel } from "./ActivityEditPanel"
@@ -64,6 +68,12 @@ interface PendingConnectionState {
 function shortModelId(value: string | GoCamModel): string {
   const raw = typeof value === "string" ? value : value.id
   return raw.replace(/^gomodel:/, "")
+}
+
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string") return error
+  return "Unable to load neighboring models."
 }
 
 function resolveLabel(termId: string | undefined, model: GoCamModel): string {
@@ -490,6 +500,18 @@ export function GraphView() {
       ),
     [workspaceConnections, workspaceModelIds]
   )
+  const focusedConnectionIndex = useMemo(() => {
+    if (!activeFocusedModelId) return -1
+    return workspaceModelIds.findIndex((workspaceId) => workspaceId === activeFocusedModelId)
+  }, [activeFocusedModelId, workspaceModelIds])
+  const focusedConnectionQuery =
+    focusedConnectionIndex >= 0 ? workspaceConnectionQueries[focusedConnectionIndex] : undefined
+  const focusedConnectionError =
+    focusedConnectionQuery?.isError ? formatErrorMessage(focusedConnectionQuery.error) : null
+  const neighboringModels = useMemo<NeighboringModelSummary[]>(() => {
+    if (!activeFocusedModelId) return []
+    return buildNeighboringModelSummaries(workspaceConnections.get(activeFocusedModelId))
+  }, [activeFocusedModelId, workspaceConnections])
   const focusedConnectionSummary = useMemo(() => {
     if (!activeFocusedModelId) return null
     const connections = workspaceConnections.get(activeFocusedModelId)
@@ -632,6 +654,24 @@ export function GraphView() {
     [selectedActivityEntry?.modelId]
   )
 
+  const handleSelectConnectorGene = useCallback(
+    (geneId: string) => {
+      if (!activeFocusedModelId) return
+      const focusedEntry = workspaceModels.find((entry) => entry.id === activeFocusedModelId)
+      if (!focusedEntry) return
+
+      const matchingActivity = (focusedEntry.model.activities ?? []).find(
+        (activity) => activity.enabled_by?.term === geneId
+      )
+      if (!matchingActivity) return
+
+      setFocusedModelId(focusedEntry.id)
+      setSelectedActivityId(matchingActivity.id)
+      setExpandedActivityId(matchingActivity.id)
+    },
+    [activeFocusedModelId, workspaceModels]
+  )
+
   const onNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       if (node.type !== "activity") return
@@ -708,6 +748,11 @@ export function GraphView() {
           anchorModelId={modelId}
           focusedModelId={activeFocusedModelId ?? modelId}
           onFocusModel={handleFocusModel}
+          neighboringModels={neighboringModels}
+          neighboringModelsLoading={Boolean(focusedConnectionQuery?.isLoading)}
+          neighboringModelsError={focusedConnectionError}
+          onImportModel={handleImportModel}
+          onSelectConnectorGene={handleSelectConnectorGene}
           onRemoveImportedModel={handleRemoveImportedModel}
         />
 
@@ -745,7 +790,7 @@ export function GraphView() {
                 {focusedConnectionSummary.geneCount} shared-gene connector{focusedConnectionSummary.geneCount === 1 ? "" : "s"} across {focusedConnectionSummary.modelCount} neighboring model{focusedConnectionSummary.modelCount === 1 ? "" : "s"}
               </p>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Click a node with an amber corner badge to inspect neighboring models and import them into this workspace.
+                Use the `Neighbors` button in the header, or click a node with an amber corner badge to inspect connected models and import them into this workspace.
               </p>
             </div>
           )}
