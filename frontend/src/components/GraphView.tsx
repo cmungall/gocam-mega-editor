@@ -70,6 +70,12 @@ function shortModelId(value: string | GoCamModel): string {
   return raw.replace(/^gomodel:/, "")
 }
 
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string") return error
+  return "Unable to load neighboring models."
+}
+
 function resolveLabel(termId: string | undefined, model: GoCamModel): string {
   if (!termId) return ""
   const obj = model.objects?.find((o) => o.id === termId)
@@ -498,6 +504,10 @@ export function GraphView() {
     if (!activeFocusedModelId) return -1
     return workspaceModelIds.findIndex((workspaceId) => workspaceId === activeFocusedModelId)
   }, [activeFocusedModelId, workspaceModelIds])
+  const focusedConnectionQuery =
+    focusedConnectionIndex >= 0 ? workspaceConnectionQueries[focusedConnectionIndex] : undefined
+  const focusedConnectionError =
+    focusedConnectionQuery?.isError ? formatErrorMessage(focusedConnectionQuery.error) : null
   const neighboringModels = useMemo<NeighboringModelSummary[]>(() => {
     if (!activeFocusedModelId) return []
     return buildNeighboringModelSummaries(workspaceConnections.get(activeFocusedModelId))
@@ -739,11 +749,8 @@ export function GraphView() {
           focusedModelId={activeFocusedModelId ?? modelId}
           onFocusModel={handleFocusModel}
           neighboringModels={neighboringModels}
-          neighboringModelsLoading={
-            focusedConnectionIndex >= 0
-              ? Boolean(workspaceConnectionQueries[focusedConnectionIndex]?.isLoading)
-              : false
-          }
+          neighboringModelsLoading={Boolean(focusedConnectionQuery?.isLoading)}
+          neighboringModelsError={focusedConnectionError}
           onImportModel={handleImportModel}
           onSelectConnectorGene={handleSelectConnectorGene}
           onRemoveImportedModel={handleRemoveImportedModel}

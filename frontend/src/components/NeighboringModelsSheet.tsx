@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { ExternalLink, GitBranch, Loader2, Network, Search } from "lucide-react"
+import { CircleAlert, ExternalLink, GitBranch, Loader2, Network, Search } from "lucide-react"
 
 import type { GoCamModel } from "@/lib/api"
 import { filterNeighboringModels, type NeighboringModelSummary } from "@/lib/neighbors"
@@ -20,6 +20,7 @@ interface Props {
   model: GoCamModel
   neighboringModels: NeighboringModelSummary[]
   loading?: boolean
+  errorMessage?: string | null
   workspaceModelIds?: string[]
   focusedModelId?: string
   onImportModel?: (modelId: string) => void
@@ -38,6 +39,7 @@ export function NeighboringModelsSheet({
   model,
   neighboringModels,
   loading = false,
+  errorMessage = null,
   workspaceModelIds = [],
   focusedModelId,
   onImportModel,
@@ -70,8 +72,13 @@ export function NeighboringModelsSheet({
       >
         <Network className="mr-1 h-3 w-3" />
         Neighbors
-        <span className="ml-1 rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
-          {loading ? "…" : neighboringModels.length}
+        <span
+          className={`
+            ml-1 rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-medium leading-none
+            ${errorMessage ? "text-destructive" : "text-muted-foreground"}
+          `}
+        >
+          {errorMessage ? "!" : loading ? "…" : neighboringModels.length}
         </span>
       </Button>
 
@@ -94,10 +101,13 @@ export function NeighboringModelsSheet({
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Filter by model title, ID, or shared gene"
                     className="pl-8"
+                    disabled={Boolean(errorMessage)}
                   />
                 </div>
                 <p className="mt-2 text-[10px] text-muted-foreground">
-                  {filteredNeighbors.length} of {neighboringModels.length} neighboring model{neighboringModels.length === 1 ? "" : "s"} shown
+                  {errorMessage
+                    ? "Neighboring models unavailable"
+                    : `${filteredNeighbors.length} of ${neighboringModels.length} neighboring model${neighboringModels.length === 1 ? "" : "s"} shown`}
                 </p>
               </div>
 
@@ -108,13 +118,23 @@ export function NeighboringModelsSheet({
                 </div>
               )}
 
-              {!loading && neighboringModels.length === 0 && (
+              {!loading && errorMessage && (
+                <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p className="font-medium">Could not load neighboring models</p>
+                    <p className="mt-1 text-xs text-destructive/80">{errorMessage}</p>
+                  </div>
+                </div>
+              )}
+
+              {!loading && !errorMessage && neighboringModels.length === 0 && (
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                   No neighboring models were found for this pathway in the current local corpus.
                 </div>
               )}
 
-              {!loading && neighboringModels.length > 0 && filteredNeighbors.length === 0 && (
+              {!loading && !errorMessage && neighboringModels.length > 0 && filteredNeighbors.length === 0 && (
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                   No neighboring models match the current filter.
                 </div>
@@ -197,7 +217,7 @@ export function NeighboringModelsSheet({
                           }
                           onClick={() => {
                             onSelectConnectorGene?.(gene.id)
-                            setOpen(false)
+                            handleOpenChange(false)
                           }}
                         >
                           {formatGeneLabel(gene)}

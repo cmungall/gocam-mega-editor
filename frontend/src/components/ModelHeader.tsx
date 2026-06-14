@@ -20,6 +20,7 @@ interface Props {
   onFocusModel?: (modelId: string) => void
   neighboringModels?: NeighboringModelSummary[]
   neighboringModelsLoading?: boolean
+  neighboringModelsError?: string | null
   onImportModel?: (modelId: string) => void
   onSelectConnectorGene?: (geneId: string) => void
   onRemoveImportedModel?: (modelId: string) => void
@@ -142,6 +143,7 @@ export function ModelHeader({
   onFocusModel,
   neighboringModels = [],
   neighboringModelsLoading = false,
+  neighboringModelsError = null,
   onImportModel,
   onSelectConnectorGene,
   onRemoveImportedModel,
@@ -355,6 +357,7 @@ export function ModelHeader({
               model={model}
               neighboringModels={neighboringModels}
               loading={neighboringModelsLoading}
+              errorMessage={neighboringModelsError}
               workspaceModelIds={workspaceEntries.map((entry) => entry.id)}
               focusedModelId={focusedModelId}
               onImportModel={onImportModel}
