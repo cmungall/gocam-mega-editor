@@ -1,11 +1,14 @@
 """Tests for storage adapters."""
 
 from pathlib import Path
-
-import pytest
 from gocam.datamodel import Activity, EnabledByGeneProductAssociation, Model
 
-from gocam_mega_editor.adapters import InMemoryAdapter, MinervaAdapter, ModelAdapter, OverlayAdapter
+from gocam_mega_editor.adapters import (
+    InMemoryAdapter,
+    MinervaAdapter,
+    ModelAdapter,
+    OverlayAdapter,
+)
 from gocam_mega_editor.models import ActivityUpdate
 from gocam_mega_editor.service import GoCamService
 
@@ -178,7 +181,9 @@ def test_service_persists_change_log(tmp_path: Path):
         ),
     )
 
-    reloaded_service = GoCamService(adapter=adapter, change_log_dir=tmp_path / "changes")
+    reloaded_service = GoCamService(
+        adapter=adapter, change_log_dir=tmp_path / "changes"
+    )
     changes = reloaded_service.get_model_changes("persisted-change")
     assert len(changes) == 1
     assert changes[0].after["term"] == "UniProtKB:Q99999"

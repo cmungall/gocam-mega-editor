@@ -52,6 +52,17 @@ export interface CausalAssociation extends Association {
   downstream_activity?: string
 }
 
+export interface MoleculeAssociation extends Association {
+  predicate?: string
+  molecule?: string
+}
+
+export interface MoleculeInstance {
+  id: string
+  term?: string
+  located_in?: Association | null
+}
+
 export interface Activity {
   id: string
   enabled_by?: Association | null
@@ -59,6 +70,7 @@ export interface Activity {
   part_of?: Association | null
   occurs_in?: Association | null
   causal_associations?: CausalAssociation[]
+  molecular_associations?: MoleculeAssociation[]
   has_input?: Association[]
   has_output?: Association[]
   has_primary_input?: Association[]
@@ -79,6 +91,7 @@ export interface GoCamModel {
   date_modified?: string | null
   comments?: string[]
   activities?: Activity[]
+  molecules?: MoleculeInstance[]
   objects?: GoCamObject[]
   provenances?: { contributor?: string[]; date?: string; provided_by?: string[] }[]
   summary?: ModelSummary
@@ -150,11 +163,37 @@ export interface ModelNode {
   activity_count: number
 }
 
+export interface ModelLinkAnchor {
+  source_activity_id?: string | null
+  target_activity_id?: string | null
+  gene_id?: string | null
+  gene_label?: string | null
+  molecular_function?: string | null
+  biological_process?: string | null
+  cellular_component?: string | null
+  molecule_id?: string | null
+  molecule_label?: string | null
+  source_role?: string | null
+  target_role?: string | null
+}
+
+export interface ModelLinkCriterion {
+  type: string
+  label: string
+  strength: string
+  count: number
+  direction: "source_to_target" | "target_to_source" | "bidirectional" | null
+  anchors: ModelLinkAnchor[]
+}
+
 export interface ModelEdge {
   source: string
   target: string
   shared_genes: SharedGene[]
   weight: number
+  score?: number
+  direction?: "source_to_target" | "target_to_source" | "bidirectional" | "undirected"
+  criteria?: ModelLinkCriterion[]
 }
 
 export interface SpeciesCluster {
@@ -170,9 +209,23 @@ export interface ConnectedModelsResult {
   total_connections: number
 }
 
-export function fetchConnectedModels(modelIds?: string[]): Promise<ConnectedModelsResult> {
-  const params = modelIds?.map((id) => `model_id=${encodeURIComponent(id)}`).join("&")
-  return fetchJson(`${BASE}/connected-models${params ? `?${params}` : ""}`)
+export function fetchConnectedModels(
+  modelIds?: string[],
+  criteria?: string[],
+  minScore = 0,
+): Promise<ConnectedModelsResult> {
+  const params = new URLSearchParams()
+  for (const id of modelIds ?? []) {
+    params.append("model_id", id)
+  }
+  for (const criterion of criteria ?? []) {
+    params.append("criteria", criterion)
+  }
+  if (minScore > 0) {
+    params.set("min_score", String(minScore))
+  }
+  const query = params.toString()
+  return fetchJson(`${BASE}/connected-models${query ? `?${query}` : ""}`)
 }
 
 export interface GeneConnection {
@@ -184,6 +237,8 @@ export interface GeneConnection {
 export interface ModelConnectionsResult {
   model_id: string
   connections: GeneConnection[]
+  linked_models?: ModelSummary[]
+  model_links?: ModelEdge[]
 }
 
 export function fetchModelConnections(modelId: string): Promise<ModelConnectionsResult> {

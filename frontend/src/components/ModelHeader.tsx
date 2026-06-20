@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, ExternalLink, Loader2, Pencil, Redo2, Undo2, X } from "lucide-react"
 
 import { fetchModelChanges, redoLastModelChange, undoLastModelChange, type ChangeRecord, type GoCamModel } from "@/lib/api"
-import type { NeighboringModelSummary } from "@/lib/neighbors"
+import { summarizeNeighborCriteria, type NeighboringModelSummary } from "@/lib/neighbors"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ModelChangesSheet } from "./ModelChangesSheet"
@@ -21,6 +21,10 @@ interface Props {
   neighboringModels?: NeighboringModelSummary[]
   neighboringModelsLoading?: boolean
   neighboringModelsError?: string | null
+  neighboringModelsOpen?: boolean
+  neighboringModelsQuery?: string
+  onNeighboringModelsOpenChange?: (open: boolean) => void
+  onNeighboringModelsQueryChange?: (query: string) => void
   onImportModel?: (modelId: string) => void
   onSelectConnectorGene?: (geneId: string) => void
   onRemoveImportedModel?: (modelId: string) => void
@@ -144,6 +148,10 @@ export function ModelHeader({
   neighboringModels = [],
   neighboringModelsLoading = false,
   neighboringModelsError = null,
+  neighboringModelsOpen,
+  neighboringModelsQuery,
+  onNeighboringModelsOpenChange,
+  onNeighboringModelsQueryChange,
   onImportModel,
   onSelectConnectorGene,
   onRemoveImportedModel,
@@ -162,6 +170,7 @@ export function ModelHeader({
   const contributor = contributorSummary(model)
   const commentCount = model.comments?.length ?? 0
   const links = modelLinks(model)
+  const linkCriteriaSummary = summarizeNeighborCriteria(neighboringModels).slice(0, 4)
   const hasDetailLine = providers.length > 0 || groups.length > 0 || contributor !== null
   const workspaceEntries = workspaceModels.map((workspaceModel) => ({
     id: shortModelId(workspaceModel),
@@ -233,7 +242,17 @@ export function ModelHeader({
           <div className="min-w-0 flex-1">
             <div className="flex flex-col gap-2">
               <div className="min-w-0">
-                <p className="text-sm font-semibold leading-snug sm:text-base">{model.title}</p>
+                <p
+                  className="overflow-hidden text-sm font-semibold leading-snug sm:text-base"
+                  title={model.title}
+                  style={{
+                    display: "-webkit-box",
+                    WebkitBoxOrient: "vertical",
+                    WebkitLineClamp: 2,
+                  }}
+                >
+                  {model.title}
+                </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <Badge variant="outline" className="font-mono text-[10px]">
                     {bioregistryCurie}
@@ -360,6 +379,10 @@ export function ModelHeader({
               errorMessage={neighboringModelsError}
               workspaceModelIds={workspaceEntries.map((entry) => entry.id)}
               focusedModelId={focusedModelId}
+              open={neighboringModelsOpen}
+              query={neighboringModelsQuery}
+              onOpenChange={onNeighboringModelsOpenChange}
+              onQueryChange={onNeighboringModelsQueryChange}
               onImportModel={onImportModel}
               onFocusModel={onFocusModel}
               onSelectConnectorGene={onSelectConnectorGene}
@@ -367,6 +390,22 @@ export function ModelHeader({
 
             <ModelChangesSheet model={model} />
           </div>
+
+          {linkCriteriaSummary.length > 0 && (
+            <div className="flex max-w-xl flex-wrap items-center gap-1.5 xl:justify-end">
+              <span className="text-[10px] font-medium text-muted-foreground">Link criteria</span>
+              {linkCriteriaSummary.map((criterion) => (
+                <Badge
+                  key={criterion.type}
+                  variant="secondary"
+                  className="text-[10px]"
+                  title={`${criterion.count} neighboring model${criterion.count === 1 ? "" : "s"}`}
+                >
+                  {criterion.label}
+                </Badge>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-1.5 xl:justify-end">
             {links.map((link) => (

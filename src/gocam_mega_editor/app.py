@@ -52,6 +52,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def _make_adapter():
     """Build adapter from GOCAM_ADAPTER env var.
 
@@ -72,7 +73,9 @@ def _make_adapter():
             return base
         if model_storage_dir.resolve() == storage_dir.resolve():
             return base
-        return OverlayAdapter(base=base, overlay=InMemoryAdapter(storage_dir=model_storage_dir))
+        return OverlayAdapter(
+            base=base, overlay=InMemoryAdapter(storage_dir=model_storage_dir)
+        )
 
     if spec == "auto":
         default_data_dir = Path("data/models")
@@ -125,7 +128,9 @@ def autocomplete(req: AutocompleteRequest) -> list[AutocompleteItem]:
     Fields: enabled_by, molecular_function, biological_process, occurs_in, evidence
     """
     results = lookup.search(req.field, req.query, taxon=req.taxon, limit=req.limit)
-    return [AutocompleteItem(id=r.id, label=r.label, category=r.category) for r in results]
+    return [
+        AutocompleteItem(id=r.id, label=r.label, category=r.category) for r in results
+    ]
 
 
 @app.get("/models", response_model=list[ModelSummary])
@@ -211,13 +216,17 @@ def redo_last_model_change(model_id: str) -> ChangeRecord:
 @app.get("/connected-models", response_model=ConnectedModels)
 def connected_models(
     model_ids: list[str] | None = Query(default=None, alias="model_id"),
+    criteria: list[str] | None = Query(default=None),
+    min_score: int = Query(default=0, ge=0),
 ) -> ConnectedModels:
-    """Discover models that share gene products.
+    """Discover models linked by fast, evidence-backed criteria.
 
     Without model_id params, scans all models in the adapter.
     With model_id params, only scans those models.
     """
-    return service.find_connected_models(model_ids)
+    return service.find_connected_models(
+        model_ids, criteria=criteria, min_score=min_score
+    )
 
 
 @app.get("/graph", response_model=MegaGraph)
@@ -261,7 +270,9 @@ def delete_causal_edge(
 ) -> dict:
     """Delete a causal association between two activities."""
     try:
-        service.delete_causal_edge(model_id, source_activity_id, target_activity_id, predicate)
+        service.delete_causal_edge(
+            model_id, source_activity_id, target_activity_id, predicate
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return {"status": "deleted"}
