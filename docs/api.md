@@ -10,7 +10,7 @@ List available GO-CAM models from the GO public index.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `limit` | int | 100 | Max models to return (1-1000) |
+| `limit` | int | 100 | Max models to return (1-5000) |
 | `offset` | int | 0 | Pagination offset |
 
 ```json

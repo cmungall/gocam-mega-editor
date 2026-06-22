@@ -10,7 +10,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 const DEFAULT_MODEL_LIST_LIMIT = 200
-const MAX_MODEL_LIST_LIMIT = 1000
+const MAX_MODEL_LIST_LIMIT = 5000
 
 function configuredModelListLimit() {
   const configured = Number.parseInt(import.meta.env.VITE_MODEL_LIST_LIMIT ?? "", 10)

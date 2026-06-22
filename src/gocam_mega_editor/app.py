@@ -135,7 +135,7 @@ def autocomplete(req: AutocompleteRequest) -> list[AutocompleteItem]:
 
 @app.get("/models", response_model=list[ModelSummary])
 def list_models(
-    limit: int = Query(default=100, ge=1, le=1000),
+    limit: int = Query(default=100, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
 ) -> list[ModelSummary]:
     """List available GO-CAM models."""

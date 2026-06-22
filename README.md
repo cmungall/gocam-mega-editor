@@ -152,7 +152,7 @@ uv run gocam-mega-editor cache-models data/models --limit 500
 
 After `just cache-models`, restart the backend before trusting model counts in the UI. The backend loads the file corpus into memory at startup and does not watch `data/models`.
 
-The frontend requests 200 models by default. Set `VITE_MODEL_LIST_LIMIT` when starting or building the frontend to request more from the API, up to the backend's per-request max of 1000:
+The frontend requests 200 models by default. Set `VITE_MODEL_LIST_LIMIT` when starting or building the frontend to request more from the API, up to the backend's per-request max of 5000:
 
 ```bash
 VITE_MODEL_LIST_LIMIT=500 npm run dev -- --host 127.0.0.1
