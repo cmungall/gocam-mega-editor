@@ -104,6 +104,8 @@ class ModelConnections(BaseModel):
 
     model_id: str
     connections: list[GeneConnection]
+    linked_models: list[ModelSummary] = []
+    model_links: list["ModelEdge"] = []
 
 
 class CausalEdgeCreate(BaseModel):
@@ -122,6 +124,33 @@ class SharedGene(BaseModel):
     model_ids: list[str]
 
 
+class ModelLinkAnchor(BaseModel):
+    """A concrete activity or molecule-level anchor supporting a model link."""
+
+    source_activity_id: str | None = None
+    target_activity_id: str | None = None
+    gene_id: str | None = None
+    gene_label: str | None = None
+    molecular_function: str | None = None
+    biological_process: str | None = None
+    cellular_component: str | None = None
+    molecule_id: str | None = None
+    molecule_label: str | None = None
+    source_role: str | None = None
+    target_role: str | None = None
+
+
+class ModelLinkCriterion(BaseModel):
+    """A typed reason two models are connected."""
+
+    type: str
+    label: str
+    strength: str
+    count: int
+    direction: str | None = None
+    anchors: list[ModelLinkAnchor] = []
+
+
 class ModelNode(BaseModel):
     """A model as a node in the mega-graph."""
 
@@ -132,12 +161,15 @@ class ModelNode(BaseModel):
 
 
 class ModelEdge(BaseModel):
-    """An edge between two models (shared gene products)."""
+    """An evidence-backed edge between two models."""
 
     source: str
     target: str
     shared_genes: list[SharedGene]
-    weight: int  # number of shared genes
+    weight: int  # number of shared genes, retained for compatibility
+    score: int = 0
+    direction: str = "undirected"
+    criteria: list[ModelLinkCriterion] = []
 
 
 class SpeciesCluster(BaseModel):

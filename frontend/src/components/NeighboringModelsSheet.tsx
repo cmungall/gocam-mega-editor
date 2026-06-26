@@ -23,6 +23,10 @@ interface Props {
   errorMessage?: string | null
   workspaceModelIds?: string[]
   focusedModelId?: string
+  open?: boolean
+  query?: string
+  onOpenChange?: (open: boolean) => void
+  onQueryChange?: (query: string) => void
   onImportModel?: (modelId: string) => void
   onFocusModel?: (modelId: string) => void
   onSelectConnectorGene?: (geneId: string) => void
@@ -42,17 +46,37 @@ export function NeighboringModelsSheet({
   errorMessage = null,
   workspaceModelIds = [],
   focusedModelId,
+  open: controlledOpen,
+  query: controlledQuery,
+  onOpenChange,
+  onQueryChange,
   onImportModel,
   onFocusModel,
   onSelectConnectorGene,
 }: Props) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState("")
+  const [internalOpen, setInternalOpen] = useState(false)
+  const [internalQuery, setInternalQuery] = useState("")
+  const open = controlledOpen ?? internalOpen
+  const query = controlledQuery ?? internalQuery
   const currentModelId = model.id.replace(/^gomodel:/, "")
   const filteredNeighbors = useMemo(
     () => filterNeighboringModels(neighboringModels, query),
     [neighboringModels, query]
   )
+
+  function setOpen(nextOpen: boolean) {
+    if (controlledOpen === undefined) {
+      setInternalOpen(nextOpen)
+    }
+    onOpenChange?.(nextOpen)
+  }
+
+  function setQuery(nextQuery: string) {
+    if (controlledQuery === undefined) {
+      setInternalQuery(nextQuery)
+    }
+    onQueryChange?.(nextQuery)
+  }
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen)
@@ -68,7 +92,7 @@ export function NeighboringModelsSheet({
         size="sm"
         className="h-8 shrink-0 rounded-full px-3 text-xs shadow-sm"
         onClick={() => setOpen(true)}
-        title="Browse neighboring models connected by shared genes"
+        title="Browse neighboring models connected by model-link criteria"
       >
         <Network className="mr-1 h-3 w-3" />
         Neighbors
@@ -87,7 +111,7 @@ export function NeighboringModelsSheet({
           <SheetHeader className="border-b">
             <SheetTitle>Neighbors of {model.title}</SheetTitle>
             <SheetDescription>
-              Connected to <span className="font-mono">{currentModelId}</span> by shared gene products. Import a model to bring it into the current level-2 workspace, or click a connector gene to jump to it in the graph.
+              Connected to <span className="font-mono">{currentModelId}</span> by fast model-link criteria. Import a model to bring it into the current level-2 workspace, or click a connector gene to jump to it in the graph.
             </SheetDescription>
           </SheetHeader>
 
@@ -99,7 +123,7 @@ export function NeighboringModelsSheet({
                   <Input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Filter by model title, ID, or shared gene"
+                    placeholder="Filter by model title, ID, gene, or link type"
                     className="pl-8"
                     disabled={Boolean(errorMessage)}
                   />
@@ -163,6 +187,7 @@ export function NeighboringModelsSheet({
                             <GitBranch className="h-3 w-3" />
                             {neighbor.sharedGeneCount} shared gene{neighbor.sharedGeneCount === 1 ? "" : "s"}
                           </span>
+                          <span>score {neighbor.linkScore}</span>
                           <span>{neighbor.activityCount} activities</span>
                           <span className="font-mono">{neighbor.id}</span>
                         </div>
@@ -204,6 +229,23 @@ export function NeighboringModelsSheet({
                       </div>
                     </div>
 
+                    {neighbor.linkCriteria.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {neighbor.linkCriteria.slice(0, 4).map((criterion) => (
+                          <Badge key={criterion.type} variant="secondary" className="text-[10px]">
+                            {criterion.label}
+                            {criterion.count > 1 ? ` (${criterion.count})` : ""}
+                          </Badge>
+                        ))}
+                        {neighbor.linkCriteria.length > 4 && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            +{neighbor.linkCriteria.length - 4} more
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {visibleGenes.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {visibleGenes.map((gene) => (
                         <button
@@ -229,6 +271,7 @@ export function NeighboringModelsSheet({
                         </Badge>
                       )}
                     </div>
+                    )}
                   </div>
                 )
               })}

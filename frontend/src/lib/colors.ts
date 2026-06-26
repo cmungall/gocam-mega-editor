@@ -50,6 +50,13 @@ export const EDGE_COLORS = {
   neutral: { stroke: "#94a3b8", label: "#475569" },      // slate
 } as const
 
+export const MOLECULE_FLOW_COLOR = {
+  stroke: "#0f766e",
+  label: "#115e59",
+  bg: "#f0fdfa",
+  border: "#14b8a6",
+} as const
+
 /** Classify a causal predicate into positive/negative/neutral */
 export function classifyPredicate(predicate: string | undefined): keyof typeof EDGE_COLORS {
   if (!predicate) return "neutral"

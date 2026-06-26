@@ -3,6 +3,8 @@ import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 
+const apiTarget = process.env.GOCAM_API_TARGET ?? "http://127.0.0.1:8484"
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -13,7 +15,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8484",
+        target: apiTarget,
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
     },

@@ -9,9 +9,20 @@ import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
+const DEFAULT_MODEL_LIST_LIMIT = 200
+const MAX_MODEL_LIST_LIMIT = 5000
+
+function configuredModelListLimit() {
+  const configured = Number.parseInt(import.meta.env.VITE_MODEL_LIST_LIMIT ?? "", 10)
+  if (!Number.isFinite(configured) || configured < 1) {
+    return DEFAULT_MODEL_LIST_LIMIT
+  }
+  return Math.min(configured, MAX_MODEL_LIST_LIMIT)
+}
+
 export function ModelList() {
   const [search, setSearch] = useState("")
-  const [limit] = useState(200)
+  const [limit] = useState(configuredModelListLimit)
 
   const { data: models, isLoading, error } = useQuery({
     queryKey: ["models", limit],

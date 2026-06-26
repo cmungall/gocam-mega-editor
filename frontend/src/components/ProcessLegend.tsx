@@ -1,5 +1,5 @@
 import type { ProcessColor } from "@/lib/colors"
-import { EDGE_COLORS } from "@/lib/colors"
+import { EDGE_COLORS, MOLECULE_FLOW_COLOR } from "@/lib/colors"
 
 interface Props {
   processColors: Map<string, ProcessColor>
@@ -35,17 +35,25 @@ export function ProcessLegend({ processColors, processLabels }: Props) {
           <EdgeLegendItem color={EDGE_COLORS.positive.stroke} label="Positive regulation" />
           <EdgeLegendItem color={EDGE_COLORS.negative.stroke} label="Negative regulation" />
           <EdgeLegendItem color={EDGE_COLORS.neutral.stroke} label="Other causal" />
+          <EdgeLegendItem color={MOLECULE_FLOW_COLOR.stroke} label="Molecule flow" dashed />
         </div>
       </div>
     </div>
   )
 }
 
-function EdgeLegendItem({ color, label }: { color: string; label: string }) {
+function EdgeLegendItem({ color, label, dashed = false }: { color: string; label: string; dashed?: boolean }) {
   return (
     <div className="flex items-center gap-1.5">
       <div className="w-3 flex items-center justify-center">
-        <div className="w-3 h-0.5 rounded" style={{ backgroundColor: color }} />
+        <div
+          className="w-3 h-0.5 rounded"
+          style={
+            dashed
+              ? { backgroundColor: "transparent", borderTop: `2px dashed ${color}` }
+              : { backgroundColor: color }
+          }
+        />
       </div>
       <span className="text-[10px]">{label}</span>
     </div>

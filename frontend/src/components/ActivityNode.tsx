@@ -15,6 +15,7 @@ export interface ActivityNodeData {
   textColor: string
   // Cross-model connections
   connectedModelCount?: number
+  connectionCriteriaLabels?: string[]
   [key: string]: unknown
 }
 
@@ -26,6 +27,10 @@ export const ActivityNode = memo(function ActivityNode({
   const d = data as unknown as ActivityNodeData
   const expanded = d.isExpanded
   const connCount = d.connectedModelCount ?? 0
+  const criterionSummary = d.connectionCriteriaLabels?.slice(0, 3).join(", ")
+  const connectionTitle = criterionSummary
+    ? `Linked to ${connCount} other model${connCount > 1 ? "s" : ""}: ${criterionSummary}`
+    : `Shared with ${connCount} other model${connCount > 1 ? "s" : ""}`
 
   return (
     <div
@@ -53,7 +58,7 @@ export const ActivityNode = memo(function ActivityNode({
         <div
           className="absolute -top-2.5 -right-2.5 min-w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm px-1"
           style={{ backgroundColor: "#f59e0b" }}
-          title={`Shared with ${connCount} other model${connCount > 1 ? "s" : ""}`}
+          title={connectionTitle}
         >
           {connCount}
         </div>

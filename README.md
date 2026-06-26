@@ -29,7 +29,7 @@ Toggle edit mode to modify activities. Edit gene product, molecular function, bi
 ![Edit panel](docs/screenshots/05-edit-panel.png)
 
 ### Change History and Neighbor Import
-The editor keeps a structured local change history with undo/redo, and model pages expose neighboring-model import directly from the header so related pathways can be brought into the same workspace. The `Neighbors` browser is scoped to the currently focused model, can be filtered by model title/ID/shared gene, and shared-gene badges can jump directly to the matching activity in the graph.
+The editor keeps a structured local change history with undo/redo, and model pages expose neighboring-model import directly from the header so related pathways can be brought into the same workspace. The `Neighbors` browser is scoped to the currently focused model, can be filtered by model title/ID/shared gene/link type, and shared-gene badges can jump directly to the matching activity in the graph.
 
 ### Multiple Pathway Types
 Works with different pathway topologies — from branching signaling cascades to linear metabolic pathways.
@@ -94,7 +94,7 @@ Works with different pathway topologies — from branching signaling cascades to
   - Add/remove evidence with ECO codes and PMID references
   - Drag between nodes to create causal edges with predicate picker
 - **Structured change history** — local persistent change log with `Undo`, `Redo`, change history, and per-change revert
-- **Neighboring model browser** — import connected models into the same level-2 workspace from the header-level `Neighbors` browser or from node/detail-panel discovery paths, and jump from shared-gene badges to connector activities in the focused model
+- **Neighboring model browser** — import connected models into the same level-2 workspace from the header-level `Neighbors` browser or from node/detail-panel discovery paths, with typed model-link criteria and shared-gene badges that jump to connector activities in the focused model
 - **Searchable model list** — filter by title, ID, contributor, or group
 - **MiniMap** with process-colored nodes for overview navigation
 
@@ -113,6 +113,8 @@ Works with different pathway topologies — from branching signaling cascades to
 # Start both servers
 just dev
 ```
+
+`just dev` kills any existing listeners on the standard dev ports before starting, so it reloads the backend's in-memory model corpus after changes to `data/models`.
 
 Or manually:
 
@@ -133,6 +135,28 @@ Backend notes:
 - the backend listens on `127.0.0.1:8484`
 - the default adapter is `auto`, which prefers the local `data/models` corpus
 - local edits persist under `.gocam-state/`
+- the visible model count is limited by the local corpus size and the frontend request limit
+
+To cache more GO-CAM models locally:
+
+```bash
+# Fetch 300 models and restart backend/frontend with a matching UI limit
+just cache-dev 300
+
+# Or only fetch models into data/models
+just cache-models 300
+
+# Or use the CLI directly
+uv run gocam-mega-editor cache-models data/models --limit 500
+```
+
+After `just cache-models`, restart the backend before trusting model counts in the UI. The backend loads the file corpus into memory at startup and does not watch `data/models`.
+
+The frontend requests 200 models by default. Set `VITE_MODEL_LIST_LIMIT` when starting or building the frontend to request more from the API, up to the backend's per-request max of 5000:
+
+```bash
+VITE_MODEL_LIST_LIMIT=500 npm run dev -- --host 127.0.0.1
+```
 
 ### Run Tests
 
@@ -149,7 +173,8 @@ cd frontend && npm run build
 |----------|--------|-------------|
 | `/models` | GET | List models (query: `limit`, `offset`) |
 | `/model/{id}` | GET | Full model as JSON |
-| `/model/{id}/connections` | GET | Shared-gene neighboring models for one model |
+| `/model/{id}/connections` | GET | Neighboring model links for one model |
+| `/connected-models` | GET | Model-to-model links with criteria filters |
 | `/model/{id}/changes` | GET | Structured change history for one model |
 | `/model/{id}/activity/{activity_id}` | PATCH | Update activity associations and evidence |
 | `/model/{id}/causal-edge` | POST | Create causal association between activities |

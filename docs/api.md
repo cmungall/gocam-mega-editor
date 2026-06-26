@@ -10,7 +10,7 @@ List available GO-CAM models from the GO public index.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `limit` | int | 100 | Max models to return (1-1000) |
+| `limit` | int | 100 | Max models to return (1-5000) |
 | `offset` | int | 0 | Pagination offset |
 
 ```json
@@ -92,6 +92,28 @@ GET /graph?model_id=568b0f9600000284&model_id=5745387b00001516
   "edge_count": 19
 }
 ```
+
+### `GET /connected-models`
+
+Discover same-species model-to-model links using fast indexed criteria.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `model_id` | string (repeatable) | Optional subset of model IDs to scan |
+| `criteria` | string (repeatable) | Optional link criteria filter |
+| `min_score` | int | Optional minimum link score |
+
+Supported criteria are `shared_gene`, `gene_mf`, `full_activity_signature`, `terminal_to_initial`, `shared_chemical`, and `chemical_flow`.
+
+```
+GET /connected-models?criteria=full_activity_signature&criteria=chemical_flow&min_score=60
+```
+
+Edges include `criteria`, `score`, and `direction` in addition to the legacy `shared_genes` and `weight` fields.
+
+### `GET /model/{model_id}/connections`
+
+Return neighboring model links for one model. The response includes legacy gene-centered `connections`, plus `linked_models` and typed `model_links` for non-gene criteria such as non-currency CHEBI overlap and chemical output-to-input flow.
 
 ### `GET /predicates`
 

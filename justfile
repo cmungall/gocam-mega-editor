@@ -5,18 +5,40 @@ serve-backend:
     uv run gocam-mega-editor serve --no-reload
 
 # Start the frontend dev server (proxies /api to backend)
-serve-frontend:
-    cd frontend && npm run dev -- --host 127.0.0.1
+serve-frontend limit="200":
+    cd frontend && VITE_MODEL_LIST_LIMIT={{limit}} npm run dev -- --host 127.0.0.1
 
-# Start both backend and frontend
-dev:
+# Kill processes listening on the standard dev ports
+kill-dev:
     #!/usr/bin/env bash
+    set -euo pipefail
+    for port in 8484 5173; do
+      pids="$(lsof -tiTCP:$port -sTCP:LISTEN || true)"
+      if [[ -n "$pids" ]]; then
+        echo "Killing port $port: $pids"
+        kill $pids 2>/dev/null || true
+      fi
+    done
+
+# Start both backend and frontend, replacing anything already on the dev ports
+dev limit="300": kill-dev
+    #!/usr/bin/env bash
+    set -euo pipefail
     uv run gocam-mega-editor serve --no-reload &
     BACKEND_PID=$!
-    cd frontend && npm run dev -- --host 127.0.0.1 &
+    cd frontend && VITE_MODEL_LIST_LIMIT={{limit}} npm run dev -- --host 127.0.0.1 &
     FRONTEND_PID=$!
     trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT
     wait
+
+# Fetch GO-CAM models into the local development corpus
+cache-models limit="200":
+    uv run gocam-mega-editor cache-models data/models --limit {{limit}}
+
+# Fetch models, then restart both dev servers with a matching frontend list limit
+cache-dev limit="300":
+    just cache-models {{limit}}
+    just dev {{limit}}
 
 # Serve documentation site
 docs:

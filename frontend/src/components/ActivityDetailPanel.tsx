@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import { X, ExternalLink, Pencil } from "lucide-react"
 import type { Activity, Association, EvidenceItem, GoCamModel, GeneConnection } from "@/lib/api"
+import type { LinkCriterionSummary } from "@/lib/neighbors"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -10,6 +11,7 @@ interface Props {
   activity: Activity
   model: GoCamModel
   geneConnection?: GeneConnection
+  neighborLinkCriteriaByModel?: Map<string, LinkCriterionSummary[]>
   workspaceModelIds?: string[]
   focusedModelId?: string
   onImportModel?: (modelId: string) => void
@@ -80,6 +82,7 @@ export function ActivityDetailPanel({
   onClose,
   onEdit,
   geneConnection,
+  neighborLinkCriteriaByModel,
   workspaceModelIds = [],
   focusedModelId,
   onImportModel,
@@ -175,42 +178,52 @@ export function ActivityDetailPanel({
                   Also in {geneConnection.other_models.length} other model{geneConnection.other_models.length > 1 ? "s" : ""}
                 </p>
                 <ul className="space-y-1.5">
-                  {geneConnection.other_models.map((m) => (
-                    <li key={m.id}>
-                      <div className="flex items-center gap-1.5">
-                        <Link
-                          to={`/model/${m.id}`}
-                          className="flex min-w-0 flex-1 items-center gap-1.5 text-xs hover:underline text-primary"
-                        >
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{m.title}</span>
-                        </Link>
-                        {m.id === currentModelId ? (
-                          <Badge variant="secondary" className="text-[10px]">
-                            Current
-                          </Badge>
-                        ) : workspaceModelIds.includes(m.id) ? (
-                          <Button
-                            variant={focusedModelId === m.id ? "secondary" : "outline"}
-                            size="sm"
-                            className="h-6 px-2 text-[10px]"
-                            onClick={() => onFocusModel?.(m.id)}
+                  {geneConnection.other_models.map((m) => {
+                    const criteria = neighborLinkCriteriaByModel?.get(m.id) ?? []
+                    return (
+                      <li key={m.id} className="space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            to={`/model/${m.id}`}
+                            className="flex min-w-0 flex-1 items-center gap-1.5 text-xs hover:underline text-primary"
                           >
-                            {focusedModelId === m.id ? "Focused" : "Focus"}
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 px-2 text-[10px]"
-                            onClick={() => onImportModel?.(m.id)}
-                          >
-                            Import
-                          </Button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{m.title}</span>
+                          </Link>
+                          {m.id === currentModelId ? (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Current
+                            </Badge>
+                          ) : workspaceModelIds.includes(m.id) ? (
+                            <Button
+                              variant={focusedModelId === m.id ? "secondary" : "outline"}
+                              size="sm"
+                              className="h-6 px-2 text-[10px]"
+                              onClick={() => onFocusModel?.(m.id)}
+                            >
+                              {focusedModelId === m.id ? "Focused" : "Focus"}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px]"
+                              onClick={() => onImportModel?.(m.id)}
+                            >
+                              Import
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {(criteria.length > 0 ? criteria : [{ type: "shared_gene", label: "Shared gene" }]).map((criterion) => (
+                            <Badge key={criterion.type} variant="secondary" className="text-[10px]">
+                              {criterion.label}
+                            </Badge>
+                          ))}
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             </>
